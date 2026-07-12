@@ -1,2 +1,1 @@
-GET /api/books
-GET /api/books
+POST /api/import

@@ -274,8 +274,60 @@ def parse_epub(raw):
     return {"title": meta_title, "author": meta_author, "language": meta_lang}, chapters
 
 
+def _clean_pdf_text(text):
+    """pdftotext output → readable paragraphs."""
+    text = text.replace("\r\n", "\n")
+    text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)          # de-hyphenate line breaks
+    text = re.sub(r"^\s*\d+\s*$", "", text, flags=re.M)   # bare page numbers
+    text = text.replace("\f", "\n\n")                      # page breaks → paragraph
+    # chapter headings must survive as their own paragraph
+    text = re.sub(r"(?mi)^[ \t]*((?:cap[ií]tulo|chapter|kapitel|parte|part)\s+\S{1,8}[ \t]*)$",
+                  r"\n\1\n", text)
+    # if the PDF has almost no blank lines, fall back to sentence-end paragraphing
+    blanks = len(re.findall(r"\n\s*\n", text))
+    if blanks < len(text) / 3000:
+        text = re.sub(r"([.!?…»”\"])\n(?=[A-ZÁÉÍÓÚÜÑ¿¡«“])", r"\1\n\n", text)
+    # join wrapped lines inside paragraphs
+    paras = re.split(r"\n\s*\n", text)
+    paras = [re.sub(r"\s*\n\s*", " ", p).strip() for p in paras]
+    return "\n\n".join(p for p in paras if p)
+
+
+def parse_pdf(raw, language="es"):
+    """Extract text from a PDF via pdftotext; OCR fallback for scanned PDFs."""
+    import shutil
+    import tempfile
+    if not shutil.which("pdftotext"):
+        raise ValueError("pdftotext not found — install poppler (brew install poppler).")
+    with tempfile.TemporaryDirectory(dir=DATA_DIR) as tmp:
+        pdf_path = os.path.join(tmp, "book.pdf")
+        with open(pdf_path, "wb") as f:
+            f.write(raw)
+        proc = subprocess.run(["pdftotext", pdf_path, "-"],
+                              capture_output=True, text=True, timeout=300)
+        text = proc.stdout or ""
+        if len(text.strip()) < 500:
+            # likely a scanned PDF without a text layer → OCR (slow, one-time)
+            if not (shutil.which("pdftoppm") and shutil.which("tesseract")):
+                raise ValueError("PDF has no text layer and no OCR tools found "
+                                 "(brew install poppler tesseract).")
+            lang = {"es": "spa", "en": "eng", "de": "deu"}.get(language, "eng")
+            subprocess.run(["pdftoppm", "-r", "200", "-gray", pdf_path,
+                            os.path.join(tmp, "pg")], check=True, timeout=1800)
+            pages = sorted(f for f in os.listdir(tmp) if f.startswith("pg"))
+            parts = []
+            for i, page in enumerate(pages):
+                ocr = subprocess.run(
+                    ["tesseract", os.path.join(tmp, page), "-", "-l", lang],
+                    capture_output=True, text=True, timeout=120)
+                parts.append(ocr.stdout)
+                print("[ocr] page %d/%d" % (i + 1, len(pages)), file=sys.stderr)
+            text = "\n\f\n".join(parts)
+    return _clean_pdf_text(text)
+
+
 CHAPTER_RE = re.compile(
-    r"^(cap[ií]tulo|chapter|kapitel|parte|part)\s+([0-9ivxlc]+|[a-záéíóúü]+)\b.*$",
+    r"^(cap[ií]tulo|chapter|kapitel|parte|part)\s+([0-9ivxlc]+|[a-záéíóúü]+)\b.{0,60}$",
     re.IGNORECASE,
 )
 
@@ -327,6 +379,12 @@ def import_book(filename, raw, title=None, author=None, language=None):
         title = title or meta["title"] or filename
         author = author or meta["author"]
         language = language or meta["language"] or "es"
+    elif filename.lower().endswith(".pdf"):
+        text = parse_pdf(raw, language=language or "es")
+        chapters = parse_txt(text)
+        title = title or os.path.splitext(os.path.basename(filename))[0]
+        author = author or ""
+        language = language or "es"
     else:
         text = raw.decode("utf-8", errors="replace")
         chapters = parse_txt(text)
