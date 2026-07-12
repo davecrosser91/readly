@@ -1,10 +1,2 @@
-GET /
-GET /
-GET /app.js
-GET /style.css
-GET /api/vocab
 GET /api/books
-GET /api/notes
-GET /api/review/next
-GET /favicon.ico
-GET /favicon.ico
+GET /api/books

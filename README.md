@@ -11,9 +11,13 @@ Spaced-Repetition-Vokabeldeck auf.
 ## Start
 
 ```bash
-python3 server.py        # stdlib-only, keine Dependencies
-# → http://127.0.0.1:8123
+./setup.sh               # prüft Dependencies, installiert den /lector-Skill,
+                         # startet den Server → http://127.0.0.1:8123
+./setup.sh --lan         # zusätzlich vom Handy/Tablet im WLAN erreichbar
+./setup.sh --stop        # Server stoppen
 ```
+
+Oder manuell: `python3 server.py` (stdlib-only, keine Dependencies).
 
 Beim ersten Start werden zwei Beispielbücher importiert (Original-Kurzgeschichten,
 Spanisch + Englisch). Eigene Bücher: EPUB oder TXT über die Bibliothek importieren.
