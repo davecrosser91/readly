@@ -202,9 +202,17 @@ function extractSentence(el) {
 }
 
 function positionPopup(el, rect) {
-  el.style.left = Math.min(rect.left, window.innerWidth - 350) + "px";
-  el.style.top =
-    (rect.bottom + 440 < window.innerHeight ? rect.bottom + 8 : Math.max(10, rect.top - 440)) + "px";
+  const m = 12, w = 340;
+  el.style.left = Math.min(Math.max(m, rect.left), window.innerWidth - w - m) + "px";
+  const below = window.innerHeight - rect.bottom;
+  if (below >= 320 || below >= rect.top) {
+    el.style.top = rect.bottom + 8 + "px";
+    el.style.maxHeight = Math.min(430, below - 24) + "px";
+  } else {
+    const h = Math.min(430, rect.top - 24);
+    el.style.top = Math.max(m, rect.top - h - 8) + "px";
+    el.style.maxHeight = h + "px";
+  }
 }
 
 $("#popExplain").onclick = async () => {
