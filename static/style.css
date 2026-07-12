@@ -229,6 +229,51 @@ label.btn { display: inline-block; }
 .review-card .rsent { color: var(--text-dim); font-family: var(--serif); font-style: italic; margin: .6rem 0; font-size: .92rem; }
 .review-actions { display: flex; gap: .5rem; justify-content: center; margin-top: 1.1rem; }
 
+/* Wissen-Tab */
+.note-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .8rem; }
+.tag {
+  background: none; border: 1px solid var(--line-strong); color: var(--text-dim);
+  font-family: inherit; font-size: .7rem; font-weight: 600; padding: .18rem .5rem;
+  cursor: pointer; transition: border-color .12s ease, color .12s ease;
+}
+.tag:hover { border-color: var(--accent); color: var(--text); }
+.tag.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.tag.small { font-size: .64rem; padding: .1rem .4rem; cursor: default; }
+.note-kind {
+  font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--text-faint); margin: 1.1rem 0 .5rem; padding-bottom: .3rem;
+  border-bottom: 1px solid var(--line);
+}
+.note-kind:first-child { margin-top: 0; }
+.note-item {
+  background: var(--panel-2); border: 1px solid var(--line);
+  padding: .65rem .85rem; margin-bottom: .5rem; font-size: .85rem; line-height: 1.6;
+}
+.note-item.grammar { border-left: 2px solid var(--accent); }
+.note-item.idea { border-left: 2px solid #b16fe0; }
+.note-item.content { border-left: 2px solid #45b880; }
+.note-src {
+  font-family: var(--serif); font-style: italic; color: var(--text-dim);
+  font-size: .82rem; margin-top: .4rem; padding-left: .6rem;
+  border-left: 1px solid var(--line-strong);
+}
+.note-foot { display: flex; align-items: center; gap: .3rem; margin-top: .5rem; }
+.note-foot .del { margin-left: auto; }
+
+/* Badges & Quick-Add */
+.badge {
+  font-size: .58rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  padding: .08rem .35rem; margin-right: .4rem; vertical-align: 2px;
+}
+.badge.open { color: var(--mark); border: 1px solid var(--mark); }
+.badge.done { color: var(--text-faint); border: 1px solid var(--line-strong); }
+.vocab-add { display: flex; gap: .4rem; margin-bottom: .9rem; }
+.vocab-add input {
+  flex: 1; font-family: inherit; font-size: .85rem; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--line); padding: .5rem .65rem;
+}
+.vocab-add input:focus { border-color: var(--accent); outline: none; }
+
 /* Wort-Popover */
 .word-pop {
   position: fixed; z-index: 50; width: 340px; max-height: 430px; overflow-y: auto;

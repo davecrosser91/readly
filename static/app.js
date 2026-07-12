@@ -96,7 +96,7 @@ async function openBook(id) {
     sel.appendChild(opt);
   });
 
-  await Promise.all([loadChapter(state.chapterIdx, state.paraIdx), loadMarks(), loadChat(), loadVocab()]);
+  await Promise.all([loadChapter(state.chapterIdx, state.paraIdx), loadMarks(), loadChat(), loadVocab(), loadNotes()]);
 }
 
 $("#backBtn").onclick = () => {
@@ -238,6 +238,13 @@ $("#popMark").onclick = async () => {
   pop.classList.add("hidden");
 };
 
+$("#popQuick").onclick = async () => {
+  const { word, sentence } = state.currentWord;
+  await api.post("/api/vocab", { book_id: state.book.book.id, word, sentence });
+  $("#popBody").innerHTML = '<em class="muted">Gespeichert ✓ — Erklärung ergänzt der nächste Agent.</em>';
+  loadVocab();
+};
+
 /* ==================================================== Auswahl-Toolbar */
 const selTool = $("#selTool");
 let selectionText = "";
@@ -265,6 +272,17 @@ $("#selMark").onclick = async () => {
   window.getSelection().removeAllRanges();
 };
 
+$("#selVocab").onclick = async () => {
+  await api.post("/api/vocab", {
+    book_id: state.book.book.id,
+    word: selectionText,
+    sentence: selectionText,
+  });
+  selTool.classList.add("hidden");
+  window.getSelection().removeAllRanges();
+  loadVocab();
+};
+
 $("#selAsk").onclick = async () => {
   await addMark("passage", selectionText);
   selTool.classList.add("hidden");
@@ -285,7 +303,16 @@ async function addMark(kind, text) {
 }
 
 async function loadMarks() {
-  state.marks = await api.get(`/api/marks?book_id=${state.book.book.id}`);
+  const bookId = state.book.book.id;
+  const [marks, pending] = await Promise.all([
+    api.get(`/api/marks?book_id=${bookId}`),
+    api.get(`/api/actions?book_id=${bookId}&status=pending`),
+  ]);
+  state.marks = marks;
+  state.pendingMarkIds = new Set(
+    pending.filter((a) => a.type === "unclear_mark")
+      .map((a) => JSON.parse(a.payload || "{}").mark_id)
+  );
   renderChips();
   renderMarkList();
   highlightMarkedWords();
@@ -314,7 +341,10 @@ function renderMarkList() {
   state.marks.forEach((m) => {
     const div = document.createElement("div");
     div.className = "mark-item " + m.kind;
-    div.innerHTML = `${m.kind === "passage" ? "„" + m.text + "“" : "<strong>" + m.text + "</strong>"}<button class="ghost del">×</button>`;
+    const open = state.pendingMarkIds && state.pendingMarkIds.has(m.id);
+    div.innerHTML = `<span class="badge ${open ? "open" : "done"}">${open ? "offen" : "besprochen"}</span>
+      ${m.kind === "passage" ? "„" + m.text + "“" : "<strong>" + m.text + "</strong>"}
+      <button class="ghost del">×</button>`;
     div.querySelector(".del").onclick = () => deleteMark(m.id);
     list.appendChild(div);
   });
@@ -385,8 +415,61 @@ $("#chatInput").addEventListener("keydown", (e) => {
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + name));
+  if (name === "vocab") loadVocab();
+  if (name === "notes") loadNotes();
+  if (name === "context") loadMarks();
 }
 document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => switchTab(t.dataset.tab)));
+
+/* ==================================================== Wissen (Notizen) */
+const KIND_LABELS = { grammar: "Grammatik", idea: "Ideen", content: "Inhalte" };
+let activeTag = null;
+
+async function loadNotes() {
+  const notes = await api.get(`/api/notes?book_id=${state.book.book.id}`);
+  const tags = [...new Set(notes.flatMap((n) => (n.tags || "").split(",").map((t) => t.trim()).filter(Boolean)))];
+  const tagBox = $("#noteTags");
+  tagBox.innerHTML = "";
+  tags.forEach((t) => {
+    const el = document.createElement("button");
+    el.className = "tag" + (activeTag === t ? " active" : "");
+    el.textContent = "#" + t;
+    el.onclick = () => { activeTag = activeTag === t ? null : t; loadNotes(); };
+    tagBox.appendChild(el);
+  });
+
+  const list = $("#noteList");
+  list.innerHTML = "";
+  const filtered = activeTag
+    ? notes.filter((n) => (n.tags || "").split(",").map((x) => x.trim()).includes(activeTag))
+    : notes;
+  if (!filtered.length) {
+    list.innerHTML = '<p class="muted">Noch nichts festgehalten. Markiere eine Stelle als „Unklar" — der nächste Agent bespricht sie mit dir und legt hier Wissen ab.</p>';
+    return;
+  }
+  ["grammar", "idea", "content"].forEach((kind) => {
+    const group = filtered.filter((n) => n.kind === kind);
+    if (!group.length) return;
+    const head = document.createElement("h4");
+    head.className = "note-kind";
+    head.textContent = KIND_LABELS[kind];
+    list.appendChild(head);
+    group.forEach((n) => {
+      const div = document.createElement("div");
+      div.className = "note-item " + n.kind;
+      const tagHtml = (n.tags || "").split(",").map((t) => t.trim()).filter(Boolean)
+        .map((t) => `<span class="tag small">#${t}</span>`).join(" ");
+      div.innerHTML = `${md(n.content)}
+        ${n.source_text ? `<div class="note-src">„${n.source_text}“</div>` : ""}
+        <div class="note-foot">${tagHtml}<button class="ghost del">×</button></div>`;
+      div.querySelector(".del").onclick = async () => {
+        await api.post(`/api/notes/${n.id}/delete`, {});
+        loadNotes();
+      };
+      list.appendChild(div);
+    });
+  });
+}
 
 /* ==================================================== Vokabeln */
 async function loadVocab() {
@@ -397,10 +480,23 @@ async function loadVocab() {
   rows.forEach((v) => {
     const d = document.createElement("details");
     d.className = "vocab-item";
-    d.innerHTML = `<summary>${v.word}</summary><div class="expl">${md(v.explanation || "")}<br><em class="muted">${v.sentence || ""}</em></div>`;
+    const expl = v.explanation
+      ? md(v.explanation)
+      : '<em class="muted">Erklärung folgt, sobald ein Agent andockt…</em>';
+    d.innerHTML = `<summary>${v.word}${v.explanation ? "" : ' <span class="badge open">offen</span>'}</summary>
+      <div class="expl">${expl}<br><em class="muted">${v.sentence || ""}</em></div>`;
     list.appendChild(d);
   });
 }
+
+$("#vocabAdd").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const word = $("#vocabWord").value.trim();
+  if (!word) return;
+  $("#vocabWord").value = "";
+  await api.post("/api/vocab", { book_id: state.book.book.id, word, sentence: "" });
+  loadVocab();
+});
 
 $("#reviewBtn").onclick = startReview;
 

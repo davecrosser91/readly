@@ -29,9 +29,35 @@ Server starten, falls er nicht läuft: `python3 server.py` (Port 8123).
 - Prüfe Verständnis mit kurzen Rückfragen statt Monologen.
 - Nutze `vocab` (reps, due_at), um zu wissen, was er schon kann; recycle alte Vokabeln in neuen Erklärungen.
 
-## Typische Aufgaben
+## Kern-Workflow: Outbox abarbeiten (Rückfrage-Prinzip)
+
+Davids Markierungen („unklar") landen als Aktionen in der Outbox. Du holst sie ab,
+bekommst den Kontext gleich mit, und **fragst David erst, was er damit will** —
+du entscheidest nicht selbst:
+
+1. `curl -s 'http://127.0.0.1:8123/api/agent/next'` → älteste offene Aktion +
+   Kontext (Buch, Kapitel, `passage.before/containing/after`, bekannte Vokabeln).
+2. `POST /api/agent/claim` `{"action_id": N, "agent": "claude-session"}`
+3. Zeige David die Stelle mit Kontext und frage, was zu tun ist. Optionen:
+   - **Vokabel anlegen** → `POST /api/vocab` `{book_id, word, sentence}` und
+     Erklärung direkt liefern via `POST /api/agent/complete` mit
+     `{"result": {"explanation": "..."}}` (bei enrich_vocab) bzw. vocab-Update
+   - **Diskutieren** → im Gespräch klären; Ergebnis optional als Chat-Nachricht
+     in den Reader spiegeln: `POST /api/agent/push` `{book_id, content}`
+   - **Grammatik-Konzept festhalten** → `POST /api/notes`
+     `{book_id, chapter_idx, kind: "grammar", content, source_text, tags}`
+   - **Idee festhalten** → `kind: "idea"`
+   - **Spannenden Inhalt festhalten** → `kind: "content"`, mit `tags` (kommagetrennt)
+4. `POST /api/agent/complete` `{"action_id": N, "result": {...}}` — die
+   Markierung wechselt in der UI von „offen" auf „besprochen".
+
+`enrich_vocab`-Aktionen (Quick-Add-Vokabeln ohne Erklärung) brauchen keine
+Rückfrage — direkt erklären und completen. Der Daemon `lector-agent.py`
+(`--engine claude|codex`) macht das auch headless.
+
+## Weitere Aufgaben
 
 - **"Lies mit"**: `/api/observe` pollen oder events.jsonl tailen; bei `lookup`/`mark_added`-Events proaktiv Nuancen erklären.
 - **"Quiz mich"**: aktuelles Kapitel aus `chapters` lesen, 3-5 Verständnisfragen in der Zielsprache stellen.
-- **Wochenrückblick**: `SELECT word, COUNT(*) ... FROM vocab WHERE created_at > datetime('now','-7 days')` — Muster benennen (z.B. viele Adjektive der Stimmung), Lernempfehlung geben.
+- **Wochenrückblick**: `SELECT word, COUNT(*) ... FROM vocab WHERE created_at > datetime('now','-7 days')` — Muster benennen, Lernempfehlung geben; Wissens-Notizen (`notes`) einbeziehen.
 - **Zusammenfassungen fehlen**: Tabelle `summaries` prüfen; fehlende Kapitel selbst zusammenfassen und einfügen — die App nutzt sie als Chat-Kontext.

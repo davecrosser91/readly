@@ -1,6 +1,15 @@
 # Lector v0.2 — Agent Protocol (Zielbild)
 
-Datum: 2026-07-12 · Status: entworfen, nicht umgesetzt
+Datum: 2026-07-12 · Status: **v0.2a umgesetzt** (Queue, Quick-Add, Wissen-Notizen,
+Agent-API, lector-agent.py) · Revision nach Feedback:
+
+- **Lokaler Chat bleibt** (direkte `claude -p`-Bridge im Server) — die Queue ist
+  das Production-Modell für Remote/Tablet, kein Ersatz.
+- **Markierung = „mir unklar"** ist das zentrale Primitiv. Der Agent holt sie mit
+  Kontext ab (Absätze davor/danach, Kapitel, Buch) und **fragt David zurück**,
+  was geschehen soll — er entscheidet nicht selbst.
+- **Vier Wissensarten** als Ergebnis: Vokabeln (`vocab`), Grammatik-Konzepte,
+  Ideen, spannende Inhalte (`notes.kind = grammar|idea|content`, frei taggbar).
 
 ## Leitidee
 

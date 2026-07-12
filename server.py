@@ -97,6 +97,27 @@ CREATE TABLE IF NOT EXISTS summaries (
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(book_id, chapter_idx)
 );
+CREATE TABLE IF NOT EXISTS notes (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER,
+  chapter_idx INTEGER DEFAULT 0,
+  kind TEXT NOT NULL,               -- 'grammar' | 'idea' | 'content'
+  content TEXT NOT NULL,
+  source_text TEXT DEFAULT '',
+  tags TEXT DEFAULT '',             -- kommagetrennt
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS actions (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER,
+  type TEXT NOT NULL,               -- 'unclear_mark' | 'enrich_vocab'
+  payload TEXT DEFAULT '{}',
+  status TEXT DEFAULT 'pending',    -- pending | claimed | done | failed
+  agent TEXT DEFAULT '',
+  result TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  claimed_at TEXT
+);
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY,
   ts TEXT DEFAULT (datetime('now')),
@@ -496,6 +517,114 @@ def api_review_answer(body):
     return {"ok": True}
 
 
+def api_quick_vocab(body):
+    """Sofort speichern, Erklärung später durch einen Agenten (enrich_vocab)."""
+    book_id = body.get("book_id")
+    word = body["word"].strip()
+    sentence = body.get("sentence", "").strip()
+    language = body.get("language", "")
+    if book_id and not language:
+        with db() as conn:
+            b = conn.execute("SELECT language FROM books WHERE id=?", (book_id,)).fetchone()
+            language = b["language"] if b else "es"
+    with db() as conn:
+        cur = conn.execute(
+            "INSERT INTO vocab (book_id, word, explanation, sentence, language) "
+            "VALUES (?,?,?,?,?)", (book_id, word, "", sentence, language or "es"))
+        vocab_id = cur.lastrowid
+        conn.execute(
+            "INSERT INTO actions (book_id, type, payload) VALUES (?,?,?)",
+            (book_id, "enrich_vocab",
+             json.dumps({"vocab_id": vocab_id, "word": word, "sentence": sentence},
+                        ensure_ascii=False)))
+    log_event(book_id, "vocab_quick_add", {"word": word})
+    return {"vocab_id": vocab_id}
+
+
+def mark_context(book_id, chapter_idx, text, span=3):
+    """Absätze vor/nach der Fundstelle einer Markierung."""
+    paras = get_paragraphs(book_id, chapter_idx)
+    key = text[:60].lower()
+    idx = next((i for i, p in enumerate(paras) if key in p.lower()), None)
+    if idx is None:
+        with db() as conn:
+            pos = conn.execute("SELECT para_idx FROM positions WHERE book_id=?",
+                               (book_id,)).fetchone()
+        idx = min(pos["para_idx"] if pos else 0, max(0, len(paras) - 1))
+    return {
+        "before": paras[max(0, idx - span):idx],
+        "containing": paras[idx] if paras else "",
+        "after": paras[idx + 1:idx + 1 + span],
+        "para_idx": idx,
+    }
+
+
+def api_agent_next(q):
+    """Älteste offene Aktion + alles, was ein Agent an Kontext braucht."""
+    with db() as conn:
+        conn.execute(  # verwaiste Claims wieder freigeben
+            "UPDATE actions SET status='pending' WHERE status='claimed' "
+            "AND claimed_at < datetime('now','-5 minutes')")
+        sql = "SELECT * FROM actions WHERE status='pending'"
+        args = []
+        if q.get("types"):
+            types = q["types"].split(",")
+            sql += " AND type IN (%s)" % ",".join("?" * len(types))
+            args += types
+        row = conn.execute(sql + " ORDER BY id LIMIT 1", args).fetchone()
+    if not row:
+        return {"action": None}
+    action = dict(row)
+    payload = json.loads(action["payload"] or "{}")
+    action["payload"] = payload
+    book_id = action["book_id"]
+    context = {}
+    if book_id:
+        with db() as conn:
+            book = conn.execute("SELECT * FROM books WHERE id=?", (book_id,)).fetchone()
+            summaries = [dict(r) for r in conn.execute(
+                "SELECT chapter_idx, content FROM summaries WHERE book_id=? ORDER BY chapter_idx",
+                (book_id,))]
+            vocab = [r["word"] for r in conn.execute(
+                "SELECT word FROM vocab WHERE book_id=? ORDER BY id DESC LIMIT 40", (book_id,))]
+        chapter_idx = payload.get("chapter_idx", 0)
+        with db() as conn:
+            ch = conn.execute("SELECT title FROM chapters WHERE book_id=? AND idx=?",
+                              (book_id, chapter_idx)).fetchone()
+        context = {
+            "book": dict(book) if book else None,
+            "chapter_idx": chapter_idx,
+            "chapter_title": ch["title"] if ch else "",
+            "chapter_summaries": summaries,
+            "known_vocab": vocab,
+        }
+        text = payload.get("text") or payload.get("sentence") or ""
+        if text:
+            context["passage"] = mark_context(book_id, chapter_idx, text)
+    return {"action": action, "context": context}
+
+
+def api_agent_complete(body):
+    action_id = body["action_id"]
+    result = body.get("result", {})
+    with db() as conn:
+        row = conn.execute("SELECT * FROM actions WHERE id=?", (action_id,)).fetchone()
+        if not row:
+            return {"ok": False, "error": "unknown action"}
+        payload = json.loads(row["payload"] or "{}")
+        if row["type"] == "enrich_vocab" and result.get("explanation"):
+            conn.execute("UPDATE vocab SET explanation=? WHERE id=?",
+                         (result["explanation"], payload.get("vocab_id")))
+        conn.execute(
+            "UPDATE actions SET status=?, result=?, agent=COALESCE(NULLIF(?,''),agent) "
+            "WHERE id=?",
+            (body.get("status", "done"), json.dumps(result, ensure_ascii=False),
+             body.get("agent", ""), action_id))
+    log_event(row["book_id"], "action_completed",
+              {"action_id": action_id, "type": row["type"]})
+    return {"ok": True}
+
+
 def api_observe():
     """Everything an observing Claude session needs in one call."""
     with db() as conn:
@@ -609,6 +738,26 @@ class Handler(BaseHTTPRequestHandler):
                         "SELECT * FROM vocab WHERE due_at <= datetime('now') "
                         "ORDER BY due_at LIMIT 20")]
                 return self._json(rows)
+            if path == "/api/notes":
+                with db() as conn:
+                    rows = [dict(r) for r in conn.execute(
+                        "SELECT * FROM notes WHERE (?='' OR book_id=?) ORDER BY id DESC",
+                        (q.get("book_id", ""), q.get("book_id", "")))]
+                return self._json(rows)
+            if path == "/api/actions":
+                with db() as conn:
+                    sql = "SELECT * FROM actions WHERE 1=1"
+                    args = []
+                    if q.get("book_id"):
+                        sql += " AND book_id=?"
+                        args.append(q["book_id"])
+                    if q.get("status"):
+                        sql += " AND status=?"
+                        args.append(q["status"])
+                    rows = [dict(r) for r in conn.execute(sql + " ORDER BY id DESC LIMIT 100", args)]
+                return self._json(rows)
+            if path == "/api/agent/next":
+                return self._json(api_agent_next(q))
             if path == "/api/observe":
                 return self._json(api_observe())
             if path.startswith("/api/"):
@@ -643,6 +792,14 @@ class Handler(BaseHTTPRequestHandler):
                         "INSERT INTO marks (book_id, chapter_idx, kind, text) VALUES (?,?,?,?)",
                         (body["book_id"], body.get("chapter_idx", 0), body["kind"], body["text"]))
                     mark_id = cur.lastrowid
+                    # jede Markierung = "mir unklar" → Outbox für andockende Agenten
+                    conn.execute(
+                        "INSERT INTO actions (book_id, type, payload) VALUES (?,?,?)",
+                        (body["book_id"], "unclear_mark",
+                         json.dumps({"mark_id": mark_id, "kind": body["kind"],
+                                     "text": body["text"],
+                                     "chapter_idx": body.get("chapter_idx", 0)},
+                                    ensure_ascii=False)))
                 log_event(body["book_id"], "mark_added",
                           {"kind": body["kind"], "text": body["text"][:120]})
                 return self._json({"id": mark_id})
@@ -657,6 +814,42 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(api_lookup(body))
             if self.path == "/api/review/answer":
                 return self._json(api_review_answer(body))
+            if self.path == "/api/vocab":
+                return self._json(api_quick_vocab(body))
+            if self.path == "/api/notes":
+                with db() as conn:
+                    cur = conn.execute(
+                        "INSERT INTO notes (book_id, chapter_idx, kind, content, source_text, tags) "
+                        "VALUES (?,?,?,?,?,?)",
+                        (body.get("book_id"), body.get("chapter_idx", 0), body["kind"],
+                         body["content"], body.get("source_text", ""),
+                         body.get("tags", "")))
+                    note_id = cur.lastrowid
+                log_event(body.get("book_id"), "note_added",
+                          {"kind": body["kind"], "tags": body.get("tags", "")})
+                return self._json({"id": note_id})
+            m = re.match(r"^/api/notes/(\d+)/delete$", self.path)
+            if m:
+                with db() as conn:
+                    conn.execute("DELETE FROM notes WHERE id=?", (int(m.group(1)),))
+                return self._json({"ok": True})
+            if self.path == "/api/agent/claim":
+                with db() as conn:
+                    cur = conn.execute(
+                        "UPDATE actions SET status='claimed', agent=?, claimed_at=datetime('now') "
+                        "WHERE id=? AND status='pending'",
+                        (body.get("agent", "unknown"), body["action_id"]))
+                return self._json({"ok": cur.rowcount == 1})
+            if self.path == "/api/agent/complete":
+                return self._json(api_agent_complete(body))
+            if self.path == "/api/agent/push":
+                with db() as conn:
+                    conn.execute(
+                        "INSERT INTO chat (book_id, role, content) VALUES (?,?,?)",
+                        (body["book_id"], "assistant", body["content"]))
+                log_event(body["book_id"], "agent_push",
+                          {"content": body["content"][:120]})
+                return self._json({"ok": True})
             return self.send_error(404)
         except Exception as e:
             return self._json({"error": str(e)}, 500)

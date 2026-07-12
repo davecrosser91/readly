@@ -24,7 +24,14 @@ Spanisch + Englisch). Eigene Bücher: EPUB oder TXT über die Bibliothek importi
 - **Wort anklicken** → Erklärung im Satzkontext: Bedeutung, Synonyme mit Nuancen, Beispielsatz — landet automatisch im Vokabeldeck
 - **Passage markieren** → wird Teil des stehenden Gesprächskontexts
 - **Chat-Sidebar**: diskutiert über die Seite; Kontext = markierte Wörter + markierte Passagen + aktuelle Seite + Zusammenfassungen der bisherigen Kapitel (werden im Hintergrund erzeugt und gecacht)
-- **Vokabeln**: Liste + einfaches Spaced-Repetition-Review (Nochmal/Gewusst)
+- **Vokabeln**: Quick-Add überall (Wort-Popover, Auswahl, manuell) — sofort
+  gespeichert, Erklärung ergänzt asynchron ein Agent; Liste + Spaced-Repetition-Review
+- **Wissen**: Grammatik-Konzepte, Ideen und spannende Inhalte als taggbare
+  Notizen — angelegt von dir oder einem Agenten
+- **Outbox/Inbox**: Markierungen („unklar") landen in einer Aktions-Queue;
+  angedockte Agenten (`/lector`-Skill interaktiv, `lector-agent.py --engine
+  claude|codex` headless) holen sie samt Kontext ab, fragen zurück, was zu tun
+  ist, und schreiben Ergebnisse in Vokabeln/Wissen/Chat zurück
 
 ## Architektur
 

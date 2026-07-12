@@ -55,6 +55,7 @@
         <button class="tab active" data-tab="chat">Gespräch</button>
         <button class="tab" data-tab="context">Kontext</button>
         <button class="tab" data-tab="vocab">Vokabeln</button>
+        <button class="tab" data-tab="notes">Wissen</button>
       </nav>
 
       <section id="tab-chat" class="tab-panel active">
@@ -75,12 +76,23 @@
       </section>
 
       <section id="tab-vocab" class="tab-panel">
+        <form id="vocabAdd" class="vocab-add">
+          <input id="vocabWord" placeholder="Wort oder Wendung schnell hinzufügen…" autocomplete="off">
+          <button class="btn btn-primary" type="submit">+</button>
+        </form>
         <div class="vocab-head">
           <button id="reviewBtn" class="btn">Wiederholen</button>
           <span id="vocabCount" class="muted"></span>
         </div>
         <div id="reviewArea" class="hidden"></div>
         <div id="vocabList"></div>
+      </section>
+
+      <section id="tab-notes" class="tab-panel">
+        <p class="hint">Grammatik, Ideen und spannende Inhalte — von dir oder einem
+        angedockten Agenten festgehalten. Tags anklicken filtert.</p>
+        <div id="noteTags" class="note-tags"></div>
+        <div id="noteList"></div>
       </section>
     </aside>
   </main>
@@ -95,13 +107,15 @@
   <div id="popBody" class="word-pop-body"></div>
   <div class="word-pop-actions">
     <button id="popExplain" class="btn btn-primary">Erklären</button>
-    <button id="popMark" class="btn">Als Kontext markieren</button>
+    <button id="popQuick" class="btn">+ Vokabel</button>
+    <button id="popMark" class="btn">Unklar</button>
   </div>
 </div>
 
 <!-- Auswahl-Toolbar -->
 <div id="selTool" class="sel-tool hidden">
-  <button id="selMark">Markieren</button>
+  <button id="selMark">Unklar</button>
+  <button id="selVocab">+ Vokabel</button>
   <button id="selAsk">Dazu fragen</button>
 </div>
 
