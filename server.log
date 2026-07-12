@@ -1,12 +1,3 @@
-GET /
-GET /
-GET /app.js
-GET /style.css
-GET /api/vocab
-GET /api/notes
-GET /api/review/next
-GET /api/books
-GET /favicon.ico
-GET /favicon.ico
-GET /api/review/next
+POST /api/vocab/1/update
 POST /api/review/answer
+GET /api/review/stats

@@ -98,6 +98,14 @@ CREATE TABLE IF NOT EXISTS summaries (
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(book_id, chapter_idx)
 );
+CREATE TABLE IF NOT EXISTS review_log (
+  id INTEGER PRIMARY KEY,
+  vocab_id INTEGER NOT NULL,
+  grade TEXT NOT NULL,              -- again | hard | good | easy
+  interval_days REAL DEFAULT 0,     -- Intervall NACH der Antwort
+  agent TEXT DEFAULT '',            -- '' = David in der UI
+  created_at TEXT DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS notes (
   id INTEGER PRIMARY KEY,
   book_id INTEGER,
@@ -522,7 +530,48 @@ def api_review_answer(body):
         conn.execute(
             "UPDATE vocab SET reps=reps+1, interval_days=?, due_at=%s WHERE id=?" % due,
             (interval, body["id"]))
+        conn.execute(
+            "INSERT INTO review_log (vocab_id, grade, interval_days, agent) VALUES (?,?,?,?)",
+            (body["id"], grade, interval, body.get("agent", "")))
     return {"ok": True}
+
+
+VOCAB_FIELDS = {"word", "sentence", "explanation", "language",
+                "due_at", "interval_days", "reps", "chapter_idx"}
+
+
+def api_vocab_update(vocab_id, body):
+    """Voller Schreibzugriff für Agenten: Inhalt UND SRS-Zustand."""
+    fields = {k: v for k, v in body.items() if k in VOCAB_FIELDS}
+    if not fields:
+        return {"ok": False, "error": "keine gültigen Felder"}
+    sets = ", ".join("%s=?" % k for k in fields)
+    with db() as conn:
+        cur = conn.execute("UPDATE vocab SET %s WHERE id=?" % sets,
+                           (*fields.values(), vocab_id))
+    log_event(None, "vocab_updated", {"id": vocab_id, "fields": list(fields)})
+    return {"ok": cur.rowcount == 1}
+
+
+def api_review_stats():
+    with db() as conn:
+        total = conn.execute("SELECT COUNT(*) n FROM vocab").fetchone()["n"]
+        due = conn.execute(
+            "SELECT COUNT(*) n FROM vocab WHERE due_at <= datetime('now')").fetchone()["n"]
+        learned = conn.execute("SELECT COUNT(*) n FROM vocab WHERE reps > 0").fetchone()["n"]
+        mature = conn.execute(
+            "SELECT COUNT(*) n FROM vocab WHERE interval_days >= 7").fetchone()["n"]
+        last7 = [dict(r) for r in conn.execute(
+            "SELECT date(created_at) day, COUNT(*) reviews, "
+            "SUM(CASE WHEN grade='again' THEN 1 ELSE 0 END) lapses "
+            "FROM review_log WHERE created_at > datetime('now','-7 days') "
+            "GROUP BY day ORDER BY day")]
+        hardest = [dict(r) for r in conn.execute(
+            "SELECT v.id, v.word, COUNT(*) lapses FROM review_log l "
+            "JOIN vocab v ON v.id=l.vocab_id WHERE l.grade='again' "
+            "GROUP BY v.id ORDER BY lapses DESC LIMIT 10")]
+    return {"total": total, "due": due, "learned": learned, "mature": mature,
+            "last_7_days": last7, "hardest_words": hardest}
 
 
 def api_quick_vocab(body):
@@ -767,6 +816,14 @@ class Handler(BaseHTTPRequestHandler):
                         "SELECT * FROM vocab WHERE due_at <= datetime('now') "
                         "ORDER BY due_at LIMIT 20")]
                 return self._json(rows)
+            if path == "/api/review/stats":
+                return self._json(api_review_stats())
+            if path == "/api/review/log":
+                with db() as conn:
+                    rows = [dict(r) for r in conn.execute(
+                        "SELECT l.*, v.word FROM review_log l LEFT JOIN vocab v "
+                        "ON v.id=l.vocab_id ORDER BY l.id DESC LIMIT 200")]
+                return self._json(rows)
             if path == "/api/notes":
                 with db() as conn:
                     rows = [dict(r) for r in conn.execute(
@@ -847,6 +904,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(api_review_answer(body))
             if self.path == "/api/vocab":
                 return self._json(api_quick_vocab(body))
+            m = re.match(r"^/api/vocab/(\d+)/update$", self.path)
+            if m:
+                return self._json(api_vocab_update(int(m.group(1)), body))
+            m = re.match(r"^/api/vocab/(\d+)/delete$", self.path)
+            if m:
+                with db() as conn:
+                    conn.execute("DELETE FROM vocab WHERE id=?", (int(m.group(1)),))
+                return self._json({"ok": True})
             if self.path == "/api/notes":
                 with db() as conn:
                     cur = conn.execute(

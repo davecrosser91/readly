@@ -55,6 +55,22 @@ du entscheidest nicht selbst:
 Rückfrage — direkt erklären und completen. Der Daemon `lector-agent.py`
 (`--engine claude|codex`) macht das auch headless.
 
+## Anki-System (voller Zugriff über die API)
+
+| Was | Wie |
+|---|---|
+| Fällige Karten | `GET /api/review/next` |
+| Karte bewerten (als David oder in Vertretung) | `POST /api/review/answer` `{id, grade: again\|hard\|good\|easy, agent}` |
+| Karte anlegen | `POST /api/vocab` `{book_id, word, sentence, chapter_idx}` |
+| Karte bearbeiten / umplanen | `POST /api/vocab/<id>/update` — Felder: word, sentence, explanation, language, due_at, interval_days, reps, chapter_idx |
+| Karte löschen | `POST /api/vocab/<id>/delete` |
+| Lernstatistik | `GET /api/review/stats` — total/due/learned/mature, letzte 7 Tage, schwerste Wörter (meiste „again") |
+| Historie | `GET /api/review/log` |
+
+Nutze das didaktisch: schwerste Wörter (`hardest_words`) in Erklärungen und
+Quiz recyclen; Karten mit schlechten Sätzen per update verbessern; beim
+Kapitelwechsel thematisch passende alte Karten via due_at vorziehen.
+
 ## Weitere Aufgaben
 
 - **"Lies mit"**: `/api/observe` pollen oder events.jsonl tailen; bei `lookup`/`mark_added`-Events proaktiv Nuancen erklären.
