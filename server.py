@@ -31,6 +31,7 @@ BOOKS_DIR = os.path.join(ROOT, "books")
 DB_PATH = os.path.join(DATA_DIR, "lector.db")
 EVENTS_PATH = os.path.join(DATA_DIR, "events.jsonl")
 PORT = int(os.environ.get("LECTOR_PORT", "8123"))
+HOST = os.environ.get("LECTOR_HOST", "127.0.0.1")  # "0.0.0.0" = im WLAN erreichbar
 CLAUDE_BIN = os.environ.get("LECTOR_CLAUDE_BIN", "claude")
 CLAUDE_MODEL = os.environ.get("LECTOR_MODEL", "")  # empty = CLI default
 
@@ -686,8 +687,8 @@ def main():
         conn.executescript(SCHEMA)
     seed()
     threading.Thread(target=summarizer_loop, daemon=True).start()
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print("Lector läuft auf http://127.0.0.1:%d" % PORT)
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    print("Lector läuft auf http://%s:%d" % (HOST, PORT))
     server.serve_forever()
 
 
