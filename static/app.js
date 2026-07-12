@@ -247,6 +247,7 @@ $("#popExplain").onclick = async () => {
       book_id: state.book.book.id,
       word,
       sentence,
+      chapter_idx: state.chapterIdx,
     });
     $("#popBody").innerHTML = md(res.explanation);
     loadVocab();
@@ -264,7 +265,7 @@ $("#popMark").onclick = async () => {
 
 $("#popQuick").onclick = async () => {
   const { word, sentence } = state.currentWord;
-  await api.post("/api/vocab", { book_id: state.book.book.id, word, sentence });
+  await api.post("/api/vocab", { book_id: state.book.book.id, word, sentence, chapter_idx: state.chapterIdx });
   $("#popBody").innerHTML = '<em class="muted">Gespeichert ✓ — Erklärung ergänzt der nächste Agent.</em>';
   loadVocab();
 };
@@ -301,6 +302,7 @@ $("#selVocab").onclick = async () => {
     book_id: state.book.book.id,
     word: selectionText,
     sentence: selectionText,
+    chapter_idx: state.chapterIdx,
   });
   selTool.classList.add("hidden");
   window.getSelection().removeAllRanges();
@@ -445,6 +447,28 @@ function switchTab(name) {
 }
 document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => switchTab(t.dataset.tab)));
 
+/* ==================================================== Sprung zur Stelle */
+async function jumpToSource(bookId, text, hintChapter) {
+  if (!bookId || !text) return;
+  if (!state.book || state.book.book.id !== bookId) await openBook(bookId);
+  const hint = hintChapter == null ? "" : hintChapter;
+  const res = await api.get(
+    `/api/locate?book_id=${bookId}&text=${encodeURIComponent(text.slice(0, 80))}&chapter_idx=${hint}`
+  );
+  if (!res.found) return;
+  await loadChapter(res.chapter_idx, res.para_idx);
+  const p = document.querySelector(`#text p[data-idx="${res.para_idx}"]`);
+  if (p) {
+    p.scrollIntoView({ block: "center" });
+    p.classList.add("flash");
+    setTimeout(() => p.classList.remove("flash"), 2200);
+  }
+}
+
+function chapterLabel(idx) {
+  return idx == null ? "" : `Kap. ${idx + 1}`;
+}
+
 /* ==================================================== Wissen (Notizen) */
 const KIND_LABELS = { grammar: "Grammatik", idea: "Ideen", content: "Inhalte" };
 let activeTag = null;
@@ -483,9 +507,17 @@ async function loadNotes() {
       div.className = "note-item " + n.kind;
       const tagHtml = (n.tags || "").split(",").map((t) => t.trim()).filter(Boolean)
         .map((t) => `<span class="tag small">#${t}</span>`).join(" ");
+      const refText = n.source_text || "";
       div.innerHTML = `${md(n.content)}
-        ${n.source_text ? `<div class="note-src">„${n.source_text}“</div>` : ""}
-        <div class="note-foot">${tagHtml}<button class="ghost del">×</button></div>`;
+        ${refText ? `<div class="note-src" title="Zur Stelle springen">„${refText}“</div>` : ""}
+        <div class="note-foot">${tagHtml}
+          ${refText ? `<button class="ghost jump">${chapterLabel(n.chapter_idx)} →</button>` : ""}
+          <button class="ghost del">×</button></div>`;
+      const jump = () => jumpToSource(n.book_id || state.book.book.id, refText, n.chapter_idx);
+      const src = div.querySelector(".note-src");
+      if (src) src.onclick = jump;
+      const jbtn = div.querySelector(".jump");
+      if (jbtn) jbtn.onclick = jump;
       div.querySelector(".del").onclick = async () => {
         await api.post(`/api/notes/${n.id}/delete`, {});
         loadNotes();
@@ -507,8 +539,16 @@ async function loadVocab() {
     const expl = v.explanation
       ? md(v.explanation)
       : '<em class="muted">Erklärung folgt, sobald ein Agent andockt…</em>';
+    const ref = v.sentence || v.word;
     d.innerHTML = `<summary>${v.word}${v.explanation ? "" : ' <span class="badge open">offen</span>'}</summary>
-      <div class="expl">${expl}<br><em class="muted">${v.sentence || ""}</em></div>`;
+      <div class="expl">${expl}
+        ${v.sentence ? `<div class="note-src" title="Zur Stelle springen">„${v.sentence}“</div>` : ""}
+        ${v.book_id ? `<button class="ghost jump">${chapterLabel(v.chapter_idx)} →</button>` : ""}
+      </div>`;
+    const jbtn = d.querySelector(".jump");
+    if (jbtn) jbtn.onclick = () => jumpToSource(v.book_id, ref, v.chapter_idx);
+    const src = d.querySelector(".note-src");
+    if (src) src.onclick = () => jumpToSource(v.book_id, ref, v.chapter_idx);
     list.appendChild(d);
   });
 }
@@ -518,7 +558,7 @@ $("#vocabAdd").addEventListener("submit", async (e) => {
   const word = $("#vocabWord").value.trim();
   if (!word) return;
   $("#vocabWord").value = "";
-  await api.post("/api/vocab", { book_id: state.book.book.id, word, sentence: "" });
+  await api.post("/api/vocab", { book_id: state.book.book.id, word, sentence: "", chapter_idx: state.chapterIdx });
   loadVocab();
 });
 

@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import xml.etree.ElementTree as ET
 import zipfile
 from html.parser import HTMLParser
@@ -491,9 +492,10 @@ def api_lookup(body):
     explanation = ask_claude(prompt)
     with db() as conn:
         conn.execute(
-            "INSERT INTO vocab (book_id, word, explanation, sentence, language) "
-            "VALUES (?,?,?,?,?)",
-            (book_id, word, explanation, sentence, book["language"]))
+            "INSERT INTO vocab (book_id, word, explanation, sentence, language, chapter_idx) "
+            "VALUES (?,?,?,?,?,?)",
+            (book_id, word, explanation, sentence, book["language"],
+             body.get("chapter_idx")))
         vocab_id = conn.execute("SELECT last_insert_rowid() AS i").fetchone()["i"]
     log_event(book_id, "lookup", {"word": word, "sentence": sentence})
     return {"explanation": explanation, "vocab_id": vocab_id}
@@ -529,8 +531,9 @@ def api_quick_vocab(body):
             language = b["language"] if b else "es"
     with db() as conn:
         cur = conn.execute(
-            "INSERT INTO vocab (book_id, word, explanation, sentence, language) "
-            "VALUES (?,?,?,?,?)", (book_id, word, "", sentence, language or "es"))
+            "INSERT INTO vocab (book_id, word, explanation, sentence, language, chapter_idx) "
+            "VALUES (?,?,?,?,?,?)",
+            (book_id, word, "", sentence, language or "es", body.get("chapter_idx")))
         vocab_id = cur.lastrowid
         conn.execute(
             "INSERT INTO actions (book_id, type, payload) VALUES (?,?,?)",
@@ -625,6 +628,26 @@ def api_agent_complete(body):
     return {"ok": True}
 
 
+def api_locate(q):
+    """Textstelle im Buch finden → (chapter_idx, para_idx) für Sprung-Referenzen."""
+    book_id = int(q.get("book_id", 0))
+    key = (q.get("text") or "").strip()[:60].lower()
+    if not key:
+        return {"found": False}
+    hint = q.get("chapter_idx")
+    with db() as conn:
+        chapters = conn.execute(
+            "SELECT idx, content FROM chapters WHERE book_id=? ORDER BY idx",
+            (book_id,)).fetchall()
+    if hint not in (None, ""):
+        chapters = sorted(chapters, key=lambda c: 0 if c["idx"] == int(hint) else 1)
+    for ch in chapters:
+        for i, p in enumerate(ch["content"].split("\n\n")):
+            if key in p.lower():
+                return {"found": True, "chapter_idx": ch["idx"], "para_idx": i}
+    return {"found": False}
+
+
 def api_observe():
     """Everything an observing Claude session needs in one call."""
     with db() as conn:
@@ -692,7 +715,7 @@ class Handler(BaseHTTPRequestHandler):
             for kv in self.path.split("?", 1)[1].split("&"):
                 if "=" in kv:
                     k, v = kv.split("=", 1)
-                    q[k] = v
+                    q[k] = urllib.parse.unquote_plus(v)
         try:
             if path == "/api/books":
                 with db() as conn:
@@ -758,6 +781,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(rows)
             if path == "/api/agent/next":
                 return self._json(api_agent_next(q))
+            if path == "/api/locate":
+                return self._json(api_locate(q))
             if path == "/api/observe":
                 return self._json(api_observe())
             if path.startswith("/api/"):
@@ -878,6 +903,9 @@ def main():
     os.makedirs(DATA_DIR, exist_ok=True)
     with db() as conn:
         conn.executescript(SCHEMA)
+        cols = [r["name"] for r in conn.execute("PRAGMA table_info(vocab)")]
+        if "chapter_idx" not in cols:
+            conn.execute("ALTER TABLE vocab ADD COLUMN chapter_idx INTEGER")
     seed()
     threading.Thread(target=summarizer_loop, daemon=True).start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)

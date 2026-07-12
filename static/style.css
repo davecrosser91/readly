@@ -300,6 +300,15 @@ label.btn { display: inline-block; }
   font-family: var(--serif); font-style: italic; color: var(--text-dim);
   font-size: .82rem; margin-top: .4rem; padding-left: .6rem;
   border-left: 1px solid var(--line-strong);
+  cursor: pointer; transition: color .12s ease, border-color .12s ease;
+}
+.note-src:hover { color: var(--text); border-left-color: var(--accent); }
+.jump { font-size: .72rem; font-weight: 700; color: var(--accent); }
+.jump:hover { background: var(--accent-dim); color: var(--accent); }
+.text p.flash { animation: flashbg 2.2s ease; }
+@keyframes flashbg {
+  0% { background: var(--accent-dim); box-shadow: -8px 0 0 var(--accent-dim), 8px 0 0 var(--accent-dim); }
+  100% { background: transparent; box-shadow: none; }
 }
 .note-foot { display: flex; align-items: center; gap: .3rem; margin-top: .5rem; }
 .note-foot .del { margin-left: auto; }
