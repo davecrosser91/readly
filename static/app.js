@@ -38,7 +38,7 @@ const state = {
   currentWord: null,   // {word, sentence, el}
 };
 
-const LANG_NAMES = { es: "Spanisch", en: "Englisch" };
+const LANG_NAMES = { es: "Spanish", en: "English" };
 
 /* ---------------- mini markdown (bold, italic, code, lists, breaks) */
 function md(text) {
@@ -68,14 +68,14 @@ async function loadLibrary() {
   ]);
 
   $("#trainInfo").textContent = due.length
-    ? `${due.length}${due.length === 20 ? "+" : ""} Karten fällig · ${vocab.length} gesamt`
-    : `Nichts fällig · ${vocab.length} Karten insgesamt`;
+    ? `${due.length}${due.length === 20 ? "+" : ""} ${due.length === 1 ? "card" : "cards"} due · ${vocab.length} total`
+    : `Nothing due · ${vocab.length} cards total`;
   $("#trainStart").disabled = !due.length;
 
   $("#libStats").innerHTML = [
-    [books.length, "Bücher"],
-    [vocab.length, "Vokabeln"],
-    [notes.length, "Wissen"],
+    [books.length, "Books"],
+    [vocab.length, "Vocab"],
+    [notes.length, "Knowledge"],
   ].map(([n, label]) => `<div class="stat"><div class="stat-n">${n}</div><div class="stat-l">${label}</div></div>`).join("");
 
   const grid = $("#bookGrid");
@@ -93,9 +93,9 @@ async function loadLibrary() {
         <div class="progress"><div class="progress-fill" style="width:${Math.max(pct, started ? 4 : 0)}%"></div></div>
         <div class="meta">
           <span>${LANG_NAMES[b.language] || b.language}</span>
-          <span>${started ? `Kapitel ${(b.chapter_idx || 0) + 1}/${b.n_chapters}` : b.n_chapters + " Kapitel"}</span>
+          <span>${started ? `Chapter ${(b.chapter_idx || 0) + 1}/${b.n_chapters}` : b.n_chapters + " chapters"}</span>
         </div>
-        <div class="cta">${started ? "Weiterlesen" : "Anfangen"} →</div>
+        <div class="cta">${started ? "Continue" : "Start reading"} →</div>
       </div>`;
     card.onclick = () => openBook(b.id);
     grid.appendChild(card);
@@ -105,7 +105,7 @@ async function loadLibrary() {
 $("#importFile").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  $("#importStatus").textContent = "Importiere…";
+  $("#importStatus").textContent = "Importing…";
   const buf = await file.arrayBuffer();
   const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
   try {
@@ -114,10 +114,10 @@ $("#importFile").addEventListener("change", async (e) => {
       data_b64: b64,
       language: $("#importLang").value,
     });
-    $("#importStatus").textContent = "Importiert ✓";
+    $("#importStatus").textContent = "Imported ✓";
     loadLibrary();
   } catch (err) {
-    $("#importStatus").textContent = "Fehler: " + err.message;
+    $("#importStatus").textContent = "Error: " + err.message;
   }
 });
 
@@ -262,7 +262,7 @@ function positionPopup(el, rect) {
 
 $("#popExplain").onclick = async () => {
   const { word, sentence } = state.currentWord;
-  $("#popBody").innerHTML = '<em class="muted">Lector denkt nach…</em>';
+  $("#popBody").innerHTML = '<em class="muted">Lector is thinking…</em>';
   try {
     const res = await api.post("/api/lookup", {
       book_id: state.book.book.id,
@@ -273,7 +273,7 @@ $("#popExplain").onclick = async () => {
     $("#popBody").innerHTML = md(res.explanation);
     loadVocab();
   } catch (err) {
-    $("#popBody").innerHTML = '<em class="muted">Fehler: ' + err.message + "</em>";
+    $("#popBody").innerHTML = '<em class="muted">Error: ' + err.message + "</em>";
   }
 };
 
@@ -287,7 +287,7 @@ $("#popMark").onclick = async () => {
 $("#popQuick").onclick = async () => {
   const { word, sentence } = state.currentWord;
   await api.post("/api/vocab", { book_id: state.book.book.id, word, sentence, chapter_idx: state.chapterIdx });
-  $("#popBody").innerHTML = '<em class="muted">Gespeichert ✓ — Erklärung ergänzt der nächste Agent.</em>';
+  $("#popBody").innerHTML = '<em class="muted">Saved ✓ — the next agent will add an explanation.</em>';
   loadVocab();
 };
 
@@ -384,12 +384,12 @@ function renderChips() {
 
 function renderMarkList() {
   const list = $("#markList");
-  list.innerHTML = state.marks.length ? "" : '<p class="muted">Noch nichts markiert. Klicke ein Wort an oder wähle eine Passage aus.</p>';
+  list.innerHTML = state.marks.length ? "" : '<p class="muted">Nothing marked yet. Click a word or select a passage.</p>';
   state.marks.forEach((m) => {
     const div = document.createElement("div");
     div.className = "mark-item " + m.kind;
     const open = state.pendingMarkIds && state.pendingMarkIds.has(m.id);
-    div.innerHTML = `<span class="badge ${open ? "open" : "done"}">${open ? "offen" : "besprochen"}</span>
+    div.innerHTML = `<span class="badge ${open ? "open" : "done"}">${open ? "open" : "discussed"}</span>
       ${m.kind === "passage" ? "„" + m.text + "“" : "<strong>" + m.text + "</strong>"}
       <button class="ghost del">×</button>`;
     div.querySelector(".del").onclick = () => deleteMark(m.id);
@@ -432,7 +432,7 @@ $("#chatForm").addEventListener("submit", async (e) => {
   if (!message) return;
   input.value = "";
   appendMsg("user", message);
-  const thinking = appendMsg("assistant", "Lector liest die Seite", true);
+  const thinking = appendMsg("assistant", "Lector is reading the page", true);
   $("#chatSend").disabled = true;
   try {
     const res = await api.post("/api/chat", {
@@ -445,7 +445,7 @@ $("#chatForm").addEventListener("submit", async (e) => {
     appendMsg("assistant", res.answer);
   } catch (err) {
     thinking.remove();
-    appendMsg("assistant", "Da ist etwas schiefgegangen: " + err.message);
+    appendMsg("assistant", "Something went wrong: " + err.message);
   } finally {
     $("#chatSend").disabled = false;
   }
@@ -487,11 +487,11 @@ async function jumpToSource(bookId, text, hintChapter) {
 }
 
 function chapterLabel(idx) {
-  return idx == null ? "" : `Kap. ${idx + 1}`;
+  return idx == null ? "" : `Ch. ${idx + 1}`;
 }
 
 /* ==================================================== Wissen (Notizen) */
-const KIND_LABELS = { grammar: "Grammatik", idea: "Ideen", content: "Inhalte" };
+const KIND_LABELS = { grammar: "Grammar", idea: "Ideas", content: "Passages" };
 let activeTag = null;
 
 async function loadNotes() {
@@ -513,7 +513,7 @@ async function loadNotes() {
     ? notes.filter((n) => (n.tags || "").split(",").map((x) => x.trim()).includes(activeTag))
     : notes;
   if (!filtered.length) {
-    list.innerHTML = '<p class="muted">Noch nichts festgehalten. Markiere eine Stelle als „Unklar" — der nächste Agent bespricht sie mit dir und legt hier Wissen ab.</p>';
+    list.innerHTML = '<p class="muted">Nothing captured yet. Mark a passage as "Unclear" — the next agent will discuss it with you and store the takeaways here.</p>';
     return;
   }
   ["grammar", "idea", "content"].forEach((kind) => {
@@ -530,7 +530,7 @@ async function loadNotes() {
         .map((t) => `<span class="tag small">#${t}</span>`).join(" ");
       const refText = n.source_text || "";
       div.innerHTML = `${md(n.content)}
-        ${refText ? `<div class="note-src" title="Zur Stelle springen">„${refText}“</div>` : ""}
+        ${refText ? `<div class="note-src" title="Jump to source">„${refText}“</div>` : ""}
         <div class="note-foot">${tagHtml}
           ${refText ? `<button class="ghost jump">${chapterLabel(n.chapter_idx)} →</button>` : ""}
           <button class="ghost del">×</button></div>`;
@@ -551,19 +551,19 @@ async function loadNotes() {
 /* ==================================================== Vokabeln */
 async function loadVocab() {
   const rows = await api.get("/api/vocab");
-  $("#vocabCount").textContent = rows.length + " Einträge";
+  $("#vocabCount").textContent = rows.length + " entries";
   const list = $("#vocabList");
-  list.innerHTML = rows.length ? "" : '<p class="muted">Noch keine Vokabeln. Klicke ein Wort im Text an und lass es dir erklären.</p>';
+  list.innerHTML = rows.length ? "" : '<p class="muted">No vocab yet. Click a word in the text and have it explained.</p>';
   rows.forEach((v) => {
     const d = document.createElement("details");
     d.className = "vocab-item";
     const expl = v.explanation
       ? md(v.explanation)
-      : '<em class="muted">Erklärung folgt, sobald ein Agent andockt…</em>';
+      : '<em class="muted">Explanation coming once an agent connects…</em>';
     const ref = v.sentence || v.word;
     d.innerHTML = `<summary>${v.word}${v.explanation ? "" : ' <span class="badge open">offen</span>'}</summary>
       <div class="expl">${expl}
-        ${v.sentence ? `<div class="note-src" title="Zur Stelle springen">„${v.sentence}“</div>` : ""}
+        ${v.sentence ? `<div class="note-src" title="Jump to source">„${v.sentence}“</div>` : ""}
         ${v.book_id ? `<button class="ghost jump">${chapterLabel(v.chapter_idx)} →</button>` : ""}
       </div>`;
     const jbtn = d.querySelector(".jump");
@@ -591,14 +591,14 @@ function escapeRegex(s) {
 }
 
 function fmtInterval(days) {
-  if (days < 1) return Math.round(days * 24) + " Std";
-  return Math.round(days) + (Math.round(days) === 1 ? " Tag" : " Tage");
+  if (days < 1) return Math.round(days * 24) + " h";
+  return Math.round(days) + (Math.round(days) === 1 ? " day" : " days");
 }
 
 function predictIntervals(card) {
   const iv = card.interval_days || 0, first = !card.reps;
   return {
-    again: "10 Min",
+    again: "10 min",
     hard: fmtInterval(first ? 0.5 : Math.max(0.5, iv * 1.2)),
     good: fmtInterval(first ? 1 : Math.max(1, iv * 2.2)),
     easy: fmtInterval(first ? 3 : Math.max(2, iv * 3.2)),
@@ -627,9 +627,9 @@ function renderTrainCard() {
     box.innerHTML = `
       <div class="t-card t-done">
         <div class="t-check">✓</div>
-        <div class="t-word">${trainDone} Karten geschafft</div>
-        <p class="muted">Der Rest kommt wieder, wenn er fällig ist.</p>
-        <div class="t-actions"><button class="btn btn-primary" id="tClose">Fertig</button></div>
+        <div class="t-word">${trainDone} cards done</div>
+        <p class="muted">The rest will come back when due.</p>
+        <div class="t-actions"><button class="btn btn-primary" id="tClose">Done</button></div>
       </div>`;
     $("#tClose").onclick = closeTrainer;
     return;
@@ -641,18 +641,18 @@ function renderTrainCard() {
   const iv = predictIntervals(card);
   box.innerHTML = `
     <div class="t-card">
-      <div class="t-label">${card.word === card.sentence ? "Wendung" : "Vokabel"} · ${LANG_NAMES[card.language] || card.language}</div>
+      <div class="t-label">${card.word === card.sentence ? "Phrase" : "Word"} · ${LANG_NAMES[card.language] || card.language}</div>
       <div class="t-word">${card.word}</div>
       ${cloze && cloze !== card.word ? `<div class="t-sent">„${cloze}“</div>` : ""}
-      <div class="t-actions"><button class="btn btn-primary" id="tReveal">Aufdecken</button></div>
+      <div class="t-actions"><button class="btn btn-primary" id="tReveal">Reveal</button></div>
       <div id="tBack" class="t-back hidden">
-        <div class="expl">${md(card.explanation || "<em>Noch keine Erklärung — der nächste Agent ergänzt sie.</em>")}</div>
+        <div class="expl">${md(card.explanation || "<em>No explanation yet — the next agent will add one.</em>")}</div>
         ${card.sentence ? `<div class="note-src">„${card.sentence}“</div>` : ""}
         <div class="grades">
-          <button class="grade-btn g-again" data-g="again">Nochmal<span class="grade-sub">${iv.again}</span></button>
-          <button class="grade-btn g-hard" data-g="hard">Schwer<span class="grade-sub">${iv.hard}</span></button>
-          <button class="grade-btn g-good" data-g="good">Gut<span class="grade-sub">${iv.good}</span></button>
-          <button class="grade-btn g-easy" data-g="easy">Leicht<span class="grade-sub">${iv.easy}</span></button>
+          <button class="grade-btn g-again" data-g="again">Again<span class="grade-sub">${iv.again}</span></button>
+          <button class="grade-btn g-hard" data-g="hard">Hard<span class="grade-sub">${iv.hard}</span></button>
+          <button class="grade-btn g-good" data-g="good">Good<span class="grade-sub">${iv.good}</span></button>
+          <button class="grade-btn g-easy" data-g="easy">Easy<span class="grade-sub">${iv.easy}</span></button>
         </div>
       </div>
     </div>`;

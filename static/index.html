@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,39 +10,39 @@
 </head>
 <body>
 
-<!-- ===================== Bibliothek ===================== -->
+<!-- ===================== Library ===================== -->
 <div id="library" class="library">
   <header class="library-head">
     <div>
       <h1>Lector<span class="tld">.</span></h1>
-      <p class="tagline">Lesen. Verstehen. Behalten.</p>
+      <p class="tagline">Read. Understand. Remember.</p>
     </div>
     <div class="head-right">
       <div class="stats" id="libStats"></div>
-      <button id="themeToggle" class="ghost theme-btn" title="Hell/Dunkel">◐</button>
+      <button id="themeToggle" class="ghost theme-btn" title="Light/dark">◐</button>
     </div>
   </header>
-  <div class="section-label">Bibliothek</div>
+  <div class="section-label">Library</div>
   <div id="bookGrid" class="book-grid"></div>
   <div class="section-label">Training</div>
   <div class="train-card">
     <div>
-      <h3>Vokabeltraining</h3>
+      <h3>Vocabulary training</h3>
       <p id="trainInfo" class="muted">…</p>
     </div>
-    <button id="trainStart" class="btn btn-primary">Starten</button>
+    <button id="trainStart" class="btn btn-primary">Start</button>
   </div>
   <div class="import-card">
     <div>
-      <h3>Buch importieren</h3>
-      <p>EPUB oder TXT — landet lokal in deiner Bibliothek.</p>
+      <h3>Import a book</h3>
+      <p>EPUB or TXT — stored locally in your library.</p>
     </div>
     <div class="import-row">
       <select id="importLang">
-        <option value="es">Spanisch</option>
-        <option value="en">Englisch</option>
+        <option value="es">Spanish</option>
+        <option value="en">English</option>
       </select>
-      <label class="btn btn-primary" for="importFile">Datei wählen…</label>
+      <label class="btn btn-primary" for="importFile">Choose file…</label>
       <input type="file" id="importFile" accept=".epub,.txt" hidden>
       <span id="importStatus" class="muted"></span>
     </div>
@@ -52,7 +52,7 @@
 <!-- ===================== Reader ===================== -->
 <div id="reader" class="reader hidden">
   <header class="reader-head">
-    <button id="backBtn" class="ghost" title="Zur Bibliothek">← Bibliothek</button>
+    <button id="backBtn" class="ghost" title="Back to library">← Library</button>
     <div class="head-center">
       <span id="bookTitle" class="book-title"></span>
       <nav class="chapter-nav">
@@ -62,7 +62,7 @@
       </nav>
     </div>
     <div class="head-right">
-      <button id="themeToggle2" class="ghost theme-btn" title="Hell/Dunkel">◐</button>
+      <button id="themeToggle2" class="ghost theme-btn" title="Light/dark">◐</button>
       <span class="lang-badge" id="langBadge"></span>
     </div>
   </header>
@@ -72,44 +72,44 @@
 
     <aside class="sidebar">
       <nav class="tabs">
-        <button class="tab active" data-tab="chat">Gespräch</button>
-        <button class="tab" data-tab="context">Kontext</button>
-        <button class="tab" data-tab="vocab">Vokabeln</button>
-        <button class="tab" data-tab="notes">Wissen</button>
+        <button class="tab active" data-tab="chat">Chat</button>
+        <button class="tab" data-tab="context">Context</button>
+        <button class="tab" data-tab="vocab">Vocab</button>
+        <button class="tab" data-tab="notes">Knowledge</button>
       </nav>
 
       <section id="tab-chat" class="tab-panel active">
         <div id="chatLog" class="chat-log">
-          <div class="chat-empty">Frag mich etwas zur Seite, zu einem Wort<br>oder zur Geschichte.</div>
+          <div class="chat-empty">Ask me about the page, a word,<br>or the story so far.</div>
         </div>
         <div id="contextChips" class="context-chips"></div>
         <form id="chatForm" class="chat-form">
-          <textarea id="chatInput" rows="2" placeholder="Über den Text sprechen…"></textarea>
-          <button type="submit" class="btn btn-primary" id="chatSend">Senden</button>
+          <textarea id="chatInput" rows="2" placeholder="Talk about the text…"></textarea>
+          <button type="submit" class="btn btn-primary" id="chatSend">Send</button>
         </form>
       </section>
 
       <section id="tab-context" class="tab-panel">
-        <p class="hint">Diese Markierungen wandern zusammen mit der aktuellen Seite und
-        den Kapitel-Zusammenfassungen in jede Frage an Lector.</p>
+        <p class="hint">These marks travel with the current page and the chapter
+        summaries into every question you ask Lector.</p>
         <div id="markList"></div>
       </section>
 
       <section id="tab-vocab" class="tab-panel">
         <form id="vocabAdd" class="vocab-add">
-          <input id="vocabWord" placeholder="Wort oder Wendung schnell hinzufügen…" autocomplete="off">
+          <input id="vocabWord" placeholder="Quickly add a word or phrase…" autocomplete="off">
           <button class="btn btn-primary" type="submit">+</button>
         </form>
         <div class="vocab-head">
-          <button id="reviewBtn" class="btn">Training</button>
+          <button id="reviewBtn" class="btn">Train</button>
           <span id="vocabCount" class="muted"></span>
         </div>
         <div id="vocabList"></div>
       </section>
 
       <section id="tab-notes" class="tab-panel">
-        <p class="hint">Grammatik, Ideen und spannende Inhalte — von dir oder einem
-        angedockten Agenten festgehalten. Tags anklicken filtert.</p>
+        <p class="hint">Grammar, ideas and interesting passages — captured by you
+        or a connected agent. Click a tag to filter.</p>
         <div id="noteTags" class="note-tags"></div>
         <div id="noteList"></div>
       </section>
@@ -117,7 +117,7 @@
   </main>
 </div>
 
-<!-- Wort-Popover -->
+<!-- Word popover -->
 <div id="wordPop" class="word-pop hidden">
   <div class="word-pop-head">
     <strong id="popWord"></strong>
@@ -125,23 +125,23 @@
   </div>
   <div id="popBody" class="word-pop-body"></div>
   <div class="word-pop-actions">
-    <button id="popExplain" class="btn btn-primary">Erklären</button>
-    <button id="popQuick" class="btn">+ Vokabel</button>
-    <button id="popMark" class="btn">Unklar</button>
+    <button id="popExplain" class="btn btn-primary">Explain</button>
+    <button id="popQuick" class="btn">+ Vocab</button>
+    <button id="popMark" class="btn">Unclear</button>
   </div>
 </div>
 
-<!-- Auswahl-Toolbar -->
+<!-- Selection toolbar -->
 <div id="selTool" class="sel-tool hidden">
-  <button id="selMark">Unklar</button>
-  <button id="selVocab">+ Vokabel</button>
-  <button id="selAsk">Dazu fragen</button>
+  <button id="selMark">Unclear</button>
+  <button id="selVocab">+ Vocab</button>
+  <button id="selAsk">Ask about it</button>
 </div>
 
-<!-- Anki-Trainer -->
+<!-- Anki trainer -->
 <div id="trainer" class="trainer hidden">
   <header class="trainer-head">
-    <span class="trainer-title">Vokabeltraining</span>
+    <span class="trainer-title">Vocabulary training</span>
     <span id="trainProgress" class="muted"></span>
     <button id="trainClose" class="ghost">×</button>
   </header>

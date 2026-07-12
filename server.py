@@ -270,7 +270,7 @@ def parse_epub(raw):
         content, heading = html_to_text(html)
         if len(content) < 200:  # skip covers, title pages
             continue
-        chapters.append((heading or "Kapitel %d" % (len(chapters) + 1), content))
+        chapters.append((heading or "Chapter %d" % (len(chapters) + 1), content))
     return {"title": meta_title, "author": meta_author, "language": meta_lang}, chapters
 
 
@@ -290,7 +290,7 @@ def parse_txt(text):
         paras = [re.sub(r"\s+", " ", p).strip() for p in re.split(r"\n\s*\n", body)]
         paras = [p for p in paras if p]
         if paras:
-            chapters.append((current_title or "Kapitel %d" % (len(chapters) + 1),
+            chapters.append((current_title or "Chapter %d" % (len(chapters) + 1),
                              "\n\n".join(paras)))
 
     for line in lines:
@@ -313,10 +313,10 @@ def parse_txt(text):
                 chunk.append(p)
                 count += len(p.split())
                 if count >= 2500:
-                    out.append(("Teil %d" % (len(out) + 1), "\n\n".join(chunk)))
+                    out.append(("Part %d" % (len(out) + 1), "\n\n".join(chunk)))
                     chunk, count = [], 0
             if chunk:
-                out.append(("Teil %d" % (len(out) + 1), "\n\n".join(chunk)))
+                out.append(("Part %d" % (len(out) + 1), "\n\n".join(chunk)))
             chapters = out
     return chapters
 
@@ -334,7 +334,7 @@ def import_book(filename, raw, title=None, author=None, language=None):
         author = author or ""
         language = language or "es"
     if not chapters:
-        raise ValueError("Keine Kapitel gefunden — Datei leer oder Format unbekannt.")
+        raise ValueError("No chapters found — file empty or unknown format.")
     with db() as conn:
         cur = conn.execute(
             "INSERT INTO books (title, author, language) VALUES (?,?,?)",
@@ -980,7 +980,7 @@ def main():
     seed()
     threading.Thread(target=summarizer_loop, daemon=True).start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print("Lector läuft auf http://%s:%d" % (HOST, PORT))
+    print("Lector running at http://%s:%d" % (HOST, PORT))
     server.serve_forever()
 
 

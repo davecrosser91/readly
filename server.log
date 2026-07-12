@@ -1,3 +1,10 @@
-POST /api/vocab/1/update
-POST /api/review/answer
-GET /api/review/stats
+GET /
+GET /
+GET /app.js
+GET /style.css
+GET /api/vocab
+GET /api/books
+GET /api/notes
+GET /api/review/next
+GET /favicon.ico
+GET /favicon.ico
