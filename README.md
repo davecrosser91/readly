@@ -5,8 +5,10 @@ aber KI-nativ: Die KI liest mit, erklärt Wörter im Kontext (Synonyme & Nuancen
 statt bloßer Übersetzung), diskutiert über den Text und baut nebenbei ein
 Spaced-Repetition-Vokabeldeck auf.
 
-**Kein API-Key nötig.** Alle KI-Features laufen über die lokale Claude-CLI
-(`claude -p`) und damit über die bestehende Claude-Subscription.
+**Kein API-Key nötig.** Alle KI-Features laufen über lokale CLIs und damit über
+bestehende Subscriptions: Claude (`claude -p`) und/oder ChatGPT (`codex exec`).
+Claude-Sessions orientieren sich an `CLAUDE.md` + `/lector`-Skill,
+Codex/ChatGPT-Sessions an `AGENTS.md` — beide sprechen dieselbe Agent-API.
 
 ## Start
 

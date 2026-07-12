@@ -37,12 +37,23 @@ echo "── Lector setup ──────────────────
 command -v python3 >/dev/null 2>&1 || { echo "✗ python3 not found — install Python 3.9+"; exit 1; }
 echo "✓ python3 $(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')"
 
+AI_ENGINE=""
 if command -v claude >/dev/null 2>&1; then
-  echo "✓ claude CLI $(claude --version 2>/dev/null | head -1)"
+  echo "✓ claude CLI $(claude --version 2>/dev/null | head -1)  (Claude subscription)"
+  AI_ENGINE="claude"
 else
-  echo "! claude CLI not found — the reader works without it, but all AI"
-  echo "  features (explanations, chat, agent) need it:"
+  echo "! claude CLI not found:"
   echo "    npm install -g @anthropic-ai/claude-code   # then: claude login"
+fi
+if command -v codex >/dev/null 2>&1; then
+  echo "✓ codex CLI $(codex --version 2>/dev/null | head -1)  (ChatGPT subscription)"
+  [ -z "$AI_ENGINE" ] && AI_ENGINE="codex"
+else
+  echo "! codex CLI not found (optional — lets the agent run on a ChatGPT subscription):"
+  echo "    npm install -g @openai/codex               # then: codex login"
+fi
+if [ -z "$AI_ENGINE" ]; then
+  echo "! No AI CLI found — the reader works, but explanations/chat/agent won't."
 fi
 
 # 2. Install the /lector skill for Claude Code -------------------------------
@@ -71,4 +82,11 @@ fi
 echo "─────────────────────────────────────────────"
 status
 echo
-echo "Next: open the URL above, or tell Claude Code: \"lies mit\" / \"read along\"."
+echo "Next steps:"
+echo "  • Open the URL above and start reading."
+echo "  • Claude Code in this repo: say \"read along\" (skill is installed)."
+echo "  • Codex/ChatGPT in this repo: reads AGENTS.md automatically."
+if [ -n "$AI_ENGINE" ]; then
+  echo "  • Background agent (fills vocab explanations from the outbox):"
+  echo "      python3 lector-agent.py --engine $AI_ENGINE"
+fi
