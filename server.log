@@ -86,3 +86,14 @@ POST /api/position
 POST /api/position
 POST /api/position
 POST /api/chat
+GET /
+GET /style.css
+GET /app.js
+GET /api/books
+GET /api/books/1
+GET /api/books/1/chapters/0
+GET /api/chat?book_id=1
+GET /api/marks?book_id=1
+GET /api/vocab
+POST /api/position
+POST /api/position
