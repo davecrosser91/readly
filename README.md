@@ -1,0 +1,42 @@
+# Lector
+
+Sprachenlernen durch Lesen — ein lokaler AI-Reader nach dem Readlang-Prinzip,
+aber KI-nativ: Die KI liest mit, erklärt Wörter im Kontext (Synonyme & Nuancen
+statt bloßer Übersetzung), diskutiert über den Text und baut nebenbei ein
+Spaced-Repetition-Vokabeldeck auf.
+
+**Kein API-Key nötig.** Alle KI-Features laufen über die lokale Claude-CLI
+(`claude -p`) und damit über die bestehende Claude-Subscription.
+
+## Start
+
+```bash
+python3 server.py        # stdlib-only, keine Dependencies
+# → http://127.0.0.1:8123
+```
+
+Beim ersten Start werden zwei Beispielbücher importiert (Original-Kurzgeschichten,
+Spanisch + Englisch). Eigene Bücher: EPUB oder TXT über die Bibliothek importieren.
+
+## Features
+
+- **Reader**: ablenkungsfreie Buch-Typografie, Kapitel-Navigation, Leseposition wird gemerkt
+- **Wort anklicken** → Erklärung im Satzkontext: Bedeutung, Synonyme mit Nuancen, Beispielsatz — landet automatisch im Vokabeldeck
+- **Passage markieren** → wird Teil des stehenden Gesprächskontexts
+- **Chat-Sidebar**: diskutiert über die Seite; Kontext = markierte Wörter + markierte Passagen + aktuelle Seite + Zusammenfassungen der bisherigen Kapitel (werden im Hintergrund erzeugt und gecacht)
+- **Vokabeln**: Liste + einfaches Spaced-Repetition-Review (Nochmal/Gewusst)
+
+## Architektur
+
+```
+static/           Reader-UI (vanilla HTML/CSS/JS)
+server.py         stdlib-HTTP-Server + SQLite + Claude-CLI-Bridge
+data/lector.db    gesamter Zustand (gläsern, per sqlite3 abfragbar)
+data/events.jsonl Live-Eventstrom (Seitenwechsel, Lookups, Marks, Chats)
+.claude/skills/lector   Mitlese-Skill für Claude-Code-Sessions
+```
+
+Die App ist bewusst „gläsern": Eine Claude-Code-Session kann über
+`GET /api/observe`, die SQLite-DB oder den Eventstrom jederzeit mitlesen und
+über die `chat`-Tabelle in den Reader hineinschreiben — das ist der
+Beobachter-/Lehrer-Modus (`/lector`-Skill).

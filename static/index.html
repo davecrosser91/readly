@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ===================== Bibliothek ===================== -->
+<div id="library" class="library">
+  <header class="library-head">
+    <h1>Lector<span class="tld">.</span></h1>
+    <p class="tagline">Lesen. Verstehen. Behalten.</p>
+  </header>
+  <div id="bookGrid" class="book-grid"></div>
+  <div class="import-card">
+    <h3>Buch importieren</h3>
+    <p>EPUB oder TXT — landet lokal in deiner Bibliothek.</p>
+    <div class="import-row">
+      <select id="importLang">
+        <option value="es">Spanisch</option>
+        <option value="en">Englisch</option>
+      </select>
+      <label class="btn btn-primary" for="importFile">Datei wählen…</label>
+      <input type="file" id="importFile" accept=".epub,.txt" hidden>
+    </div>
+    <p id="importStatus" class="muted"></p>
+  </div>
+</div>
+
+<!-- ===================== Reader ===================== -->
+<div id="reader" class="reader hidden">
+  <header class="reader-head">
+    <button id="backBtn" class="ghost" title="Zur Bibliothek">← Bibliothek</button>
+    <div class="head-center">
+      <span id="bookTitle" class="book-title"></span>
+      <nav class="chapter-nav">
+        <button id="prevChapter" class="ghost">‹</button>
+        <select id="chapterSelect"></select>
+        <button id="nextChapter" class="ghost">›</button>
+      </nav>
+    </div>
+    <span class="lang-badge" id="langBadge"></span>
+  </header>
+
+  <main class="reader-body">
+    <article id="text" class="text"></article>
+
+    <aside class="sidebar">
+      <nav class="tabs">
+        <button class="tab active" data-tab="chat">Gespräch</button>
+        <button class="tab" data-tab="context">Kontext</button>
+        <button class="tab" data-tab="vocab">Vokabeln</button>
+      </nav>
+
+      <section id="tab-chat" class="tab-panel active">
+        <div id="chatLog" class="chat-log">
+          <div class="chat-empty">Frag mich etwas zur Seite, zu einem Wort<br>oder zur Geschichte.</div>
+        </div>
+        <div id="contextChips" class="context-chips"></div>
+        <form id="chatForm" class="chat-form">
+          <textarea id="chatInput" rows="2" placeholder="Über den Text sprechen…"></textarea>
+          <button type="submit" class="btn btn-primary" id="chatSend">Senden</button>
+        </form>
+      </section>
+
+      <section id="tab-context" class="tab-panel">
+        <p class="hint">Diese Markierungen wandern zusammen mit der aktuellen Seite und
+        den Kapitel-Zusammenfassungen in jede Frage an Lector.</p>
+        <div id="markList"></div>
+      </section>
+
+      <section id="tab-vocab" class="tab-panel">
+        <div class="vocab-head">
+          <button id="reviewBtn" class="btn">Wiederholen</button>
+          <span id="vocabCount" class="muted"></span>
+        </div>
+        <div id="reviewArea" class="hidden"></div>
+        <div id="vocabList"></div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<!-- Wort-Popover -->
+<div id="wordPop" class="word-pop hidden">
+  <div class="word-pop-head">
+    <strong id="popWord"></strong>
+    <button id="popClose" class="ghost">×</button>
+  </div>
+  <div id="popBody" class="word-pop-body"></div>
+  <div class="word-pop-actions">
+    <button id="popExplain" class="btn btn-primary">Erklären</button>
+    <button id="popMark" class="btn">Als Kontext markieren</button>
+  </div>
+</div>
+
+<!-- Auswahl-Toolbar -->
+<div id="selTool" class="sel-tool hidden">
+  <button id="selMark">Markieren</button>
+  <button id="selAsk">Dazu fragen</button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
