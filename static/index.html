@@ -17,10 +17,21 @@
       <h1>Lector<span class="tld">.</span></h1>
       <p class="tagline">Lesen. Verstehen. Behalten.</p>
     </div>
-    <div class="stats" id="libStats"></div>
+    <div class="head-right">
+      <div class="stats" id="libStats"></div>
+      <button id="themeToggle" class="ghost theme-btn" title="Hell/Dunkel">◐</button>
+    </div>
   </header>
   <div class="section-label">Bibliothek</div>
   <div id="bookGrid" class="book-grid"></div>
+  <div class="section-label">Training</div>
+  <div class="train-card">
+    <div>
+      <h3>Vokabeltraining</h3>
+      <p id="trainInfo" class="muted">…</p>
+    </div>
+    <button id="trainStart" class="btn btn-primary">Starten</button>
+  </div>
   <div class="import-card">
     <div>
       <h3>Buch importieren</h3>
@@ -50,7 +61,10 @@
         <button id="nextChapter" class="ghost">›</button>
       </nav>
     </div>
-    <span class="lang-badge" id="langBadge"></span>
+    <div class="head-right">
+      <button id="themeToggle2" class="ghost theme-btn" title="Hell/Dunkel">◐</button>
+      <span class="lang-badge" id="langBadge"></span>
+    </div>
   </header>
 
   <main class="reader-body">
@@ -87,10 +101,9 @@
           <button class="btn btn-primary" type="submit">+</button>
         </form>
         <div class="vocab-head">
-          <button id="reviewBtn" class="btn">Wiederholen</button>
+          <button id="reviewBtn" class="btn">Training</button>
           <span id="vocabCount" class="muted"></span>
         </div>
-        <div id="reviewArea" class="hidden"></div>
         <div id="vocabList"></div>
       </section>
 
@@ -123,6 +136,16 @@
   <button id="selMark">Unklar</button>
   <button id="selVocab">+ Vokabel</button>
   <button id="selAsk">Dazu fragen</button>
+</div>
+
+<!-- Anki-Trainer -->
+<div id="trainer" class="trainer hidden">
+  <header class="trainer-head">
+    <span class="trainer-title">Vokabeltraining</span>
+    <span id="trainProgress" class="muted"></span>
+    <button id="trainClose" class="ghost">×</button>
+  </header>
+  <div id="trainCard" class="trainer-body"></div>
 </div>
 
 <script src="app.js"></script>

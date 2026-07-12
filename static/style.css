@@ -14,10 +14,30 @@
   --accent-dim: rgba(79, 124, 255, .13);
   --mark: #d9a23c;
   --mark-soft: rgba(217, 162, 60, .16);
-  --white: #ffffff;
+  --inverse-bg: #ffffff;
+  --inverse-text: #0a0b0d;
   --shadow: 0 12px 32px rgba(0, 0, 0, .5);
   --sans: "Instrument Sans", -apple-system, "Segoe UI", sans-serif;
   --serif: "Newsreader", "Iowan Old Style", Palatino, Georgia, serif;
+}
+
+[data-theme="light"] {
+  --bg: #f7f6f3;
+  --panel: #fffdfa;
+  --panel-2: #f1efe9;
+  --line: #e5e2da;
+  --line-strong: #cbc7bb;
+  --text: #191a1c;
+  --text-read: #232529;
+  --text-dim: #5d626b;
+  --text-faint: #8f939b;
+  --accent: #3757d8;
+  --accent-dim: rgba(55, 87, 216, .1);
+  --mark: #a97a1a;
+  --mark-soft: rgba(169, 122, 26, .15);
+  --inverse-bg: #17181a;
+  --inverse-text: #ffffff;
+  --shadow: 0 12px 32px rgba(60, 55, 40, .16);
 }
 
 * { box-sizing: border-box; border-radius: 0; }
@@ -33,7 +53,7 @@ body {
 .muted { color: var(--text-faint); font-size: .78rem; }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #2a2d34; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); }
 ::-webkit-scrollbar-track { background: transparent; }
 
 button { font-family: inherit; cursor: pointer; }
@@ -49,8 +69,9 @@ button { font-family: inherit; cursor: pointer; }
   transition: border-color .12s ease, background .12s ease, color .12s ease;
 }
 .btn:hover { border-color: var(--text-dim); background: var(--panel-2); }
-.btn-primary { background: var(--white); border-color: var(--white); color: #0a0b0d; }
-.btn-primary:hover { background: #d9dce2; border-color: #d9dce2; }
+.btn-primary { background: var(--inverse-bg); border-color: var(--inverse-bg); color: var(--inverse-text); }
+.btn-primary:hover { opacity: .85; }
+.btn:disabled { opacity: .4; cursor: default; }
 select {
   font-family: inherit; font-size: .82rem; font-weight: 500; color: var(--text);
   background: var(--panel-2); border: 1px solid var(--line);
@@ -182,7 +203,7 @@ label.btn { display: inline-block; }
 }
 .text p { max-width: 60ch; margin: 0 auto 1.2em; }
 .w { transition: background .1s ease, color .1s ease; }
-.w:hover { background: var(--accent-dim); color: #9db9ff; cursor: pointer; }
+.w:hover { background: var(--accent-dim); color: var(--accent); cursor: pointer; }
 .w.marked { background: var(--mark-soft); box-shadow: inset 0 -2px 0 var(--mark); }
 ::selection { background: rgba(79, 124, 255, .3); }
 
@@ -211,7 +232,7 @@ label.btn { display: inline-block; }
   font-size: .88rem; line-height: 1.6; animation: rise .2s ease;
 }
 .msg.user {
-  align-self: flex-end; background: var(--white); color: #0a0b0d; font-weight: 500;
+  align-self: flex-end; background: var(--inverse-bg); color: var(--inverse-text); font-weight: 500;
 }
 .msg.assistant {
   align-self: flex-start; background: var(--panel-2); border: 1px solid var(--line);
@@ -246,7 +267,7 @@ label.btn { display: inline-block; }
 .chat-form .btn-primary { padding: .5rem .95rem; }
 
 /* Kontext-Tab */
-.hint { font-size: .78rem; color: var(--text-faint); line-height: 1.6; margin: .2rem 0 1rem; }
+.hint { font-size: .74rem; color: var(--text-faint); line-height: 1.55; margin: .1rem 0 .9rem; }
 .mark-item {
   background: var(--panel-2); border: 1px solid var(--line);
   padding: .6rem .85rem; margin-bottom: .5rem; font-size: .85rem; position: relative;
@@ -265,19 +286,66 @@ label.btn { display: inline-block; }
 .vocab-item summary { font-weight: 600; cursor: pointer; font-size: .88rem; }
 .vocab-item summary::marker { color: var(--accent); }
 .vocab-item .expl { font-size: .82rem; line-height: 1.6; color: var(--text-dim); margin-top: .45rem; }
-.review-card {
-  background: var(--panel-2); border: 1px solid var(--line-strong);
-  padding: 1.6rem 1.2rem; text-align: center; margin-bottom: 1rem;
+/* ===================== Anki-Trainer ===================== */
+.head-right { display: flex; align-items: center; gap: 1.2rem; }
+.theme-btn { font-size: 1.15rem; line-height: 1; }
+.train-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 2rem;
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 1.2rem 1.5rem; margin: 1.4rem 0 2.6rem;
 }
-.review-card .rword { font-size: 1.55rem; font-weight: 700; letter-spacing: -.02em; }
-.review-card .rsent { color: var(--text-dim); font-family: var(--serif); font-style: italic; margin: .6rem 0; font-size: .92rem; }
-.review-actions { display: flex; gap: .5rem; justify-content: center; margin-top: 1.1rem; }
+.train-card h3 { margin: 0 0 .15rem; font-size: .95rem; font-weight: 600; }
+.train-card p { margin: 0; }
+
+.trainer { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: flex; flex-direction: column; }
+.trainer-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: .7rem 1.2rem; border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.trainer-title {
+  font-size: .72rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--text-dim);
+}
+.trainer-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem 1.2rem; overflow-y: auto; }
+.t-card {
+  width: 100%; max-width: 560px; background: var(--panel);
+  border: 1px solid var(--line); padding: 2.2rem 2.1rem; animation: rise .25s ease;
+}
+.t-label {
+  font-size: .66rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.t-word { font-size: 2.1rem; font-weight: 700; letter-spacing: -.03em; margin: .5rem 0 .3rem; }
+.t-sent { font-family: var(--serif); font-style: italic; color: var(--text-dim); font-size: 1.05rem; line-height: 1.6; }
+.t-actions { margin-top: 1.6rem; }
+.t-back { border-top: 1px solid var(--line); margin-top: 1.5rem; padding-top: 1.3rem; }
+.t-back .expl { font-size: .92rem; line-height: 1.65; color: var(--text-read); }
+.t-back .note-src { margin-top: .8rem; }
+.grades { display: grid; grid-template-columns: repeat(4, 1fr); gap: .5rem; margin-top: 1.5rem; }
+.grade-btn {
+  border: 1px solid var(--line-strong); background: transparent; color: var(--text);
+  padding: .65rem 0 .5rem; font-family: inherit; font-size: .8rem; font-weight: 700;
+  transition: border-color .12s ease, background .12s ease;
+}
+.grade-btn:hover { background: var(--panel-2); }
+.grade-btn .grade-sub { display: block; font-size: .62rem; font-weight: 600; color: var(--text-faint); margin-top: .2rem; }
+.g-again:hover { border-color: #c2543f; color: #d3705d; }
+.g-hard:hover { border-color: var(--mark); color: var(--mark); }
+.g-good:hover { border-color: var(--accent); color: var(--accent); }
+.g-easy:hover { border-color: #3f9e6e; color: #47b17c; }
+.t-done { text-align: center; }
+.t-done .t-check {
+  width: 44px; height: 44px; margin: 0 auto 1rem; display: flex; align-items: center;
+  justify-content: center; border: 1px solid #3f9e6e; color: #47b17c; font-size: 1.3rem;
+}
+.t-done .t-word { font-size: 1.4rem; }
+.t-done .t-actions { display: flex; justify-content: center; }
 
 /* Wissen-Tab */
 .note-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: .8rem; }
 .tag {
-  background: none; border: 1px solid var(--line-strong); color: var(--text-dim);
-  font-family: inherit; font-size: .7rem; font-weight: 600; padding: .18rem .5rem;
+  background: none; border: 1px solid var(--line); color: var(--text-dim);
+  font-family: inherit; font-size: .68rem; font-weight: 600; padding: .16rem .45rem;
   cursor: pointer; transition: border-color .12s ease, color .12s ease;
 }
 .tag:hover { border-color: var(--accent); color: var(--text); }

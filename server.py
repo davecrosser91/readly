@@ -502,17 +502,23 @@ def api_lookup(body):
 
 
 def api_review_answer(body):
-    grade = body["grade"]  # 'again' | 'good'
+    grade = body["grade"]  # 'again' | 'hard' | 'good' | 'easy' (Anki-Stufen)
     with db() as conn:
         card = conn.execute("SELECT * FROM vocab WHERE id=?", (body["id"],)).fetchone()
         if not card:
             return {"ok": False}
-        if grade == "good":
-            interval = max(1.0, (card["interval_days"] or 0) * 2.2) if card["reps"] else 1.0
-            due = "datetime('now', '+%d hours')" % int(interval * 24)
+        iv = card["interval_days"] or 0
+        first = not card["reps"]
+        if grade == "again":
+            interval, due = 0, "datetime('now', '+10 minutes')"
         else:
-            interval = 0
-            due = "datetime('now', '+10 minutes')"
+            if grade == "hard":
+                interval = 0.5 if first else max(0.5, iv * 1.2)
+            elif grade == "easy":
+                interval = 3.0 if first else max(2.0, iv * 3.2)
+            else:  # good
+                interval = 1.0 if first else max(1.0, iv * 2.2)
+            due = "datetime('now', '+%d hours')" % int(interval * 24)
         conn.execute(
             "UPDATE vocab SET reps=reps+1, interval_days=?, due_at=%s WHERE id=?" % due,
             (interval, body["id"]))

@@ -15,6 +15,21 @@ const api = {
     }),
 };
 
+/* ---------------- Theme */
+const savedTheme = localStorage.getItem("lector-theme");
+if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("lector-theme", next);
+}
+document.addEventListener("DOMContentLoaded", () => {
+  ["#themeToggle", "#themeToggle2"].forEach((s) => {
+    const b = document.querySelector(s);
+    if (b) b.onclick = toggleTheme;
+  });
+});
+
 const state = {
   book: null,          // {book, chapters, position}
   chapterIdx: 0,
@@ -45,11 +60,17 @@ function bookHue(title) {
 }
 
 async function loadLibrary() {
-  const [books, vocab, notes] = await Promise.all([
+  const [books, vocab, notes, due] = await Promise.all([
     api.get("/api/books"),
     api.get("/api/vocab"),
     api.get("/api/notes"),
+    api.get("/api/review/next"),
   ]);
+
+  $("#trainInfo").textContent = due.length
+    ? `${due.length}${due.length === 20 ? "+" : ""} Karten fällig · ${vocab.length} gesamt`
+    : `Nichts fällig · ${vocab.length} Karten insgesamt`;
+  $("#trainStart").disabled = !due.length;
 
   $("#libStats").innerHTML = [
     [books.length, "Bücher"],
@@ -562,51 +583,101 @@ $("#vocabAdd").addEventListener("submit", async (e) => {
   loadVocab();
 });
 
-$("#reviewBtn").onclick = startReview;
+/* ==================================================== Anki-Trainer */
+let trainQueue = [], trainIdx = 0, trainDone = 0;
 
-async function startReview() {
-  const due = await api.get("/api/review/next");
-  const area = $("#reviewArea");
-  area.classList.remove("hidden");
-  if (!due.length) {
-    area.innerHTML = '<p class="muted">Nichts fällig. Lies weiter!</p>';
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function fmtInterval(days) {
+  if (days < 1) return Math.round(days * 24) + " Std";
+  return Math.round(days) + (Math.round(days) === 1 ? " Tag" : " Tage");
+}
+
+function predictIntervals(card) {
+  const iv = card.interval_days || 0, first = !card.reps;
+  return {
+    again: "10 Min",
+    hard: fmtInterval(first ? 0.5 : Math.max(0.5, iv * 1.2)),
+    good: fmtInterval(first ? 1 : Math.max(1, iv * 2.2)),
+    easy: fmtInterval(first ? 3 : Math.max(2, iv * 3.2)),
+  };
+}
+
+async function openTrainer() {
+  trainQueue = await api.get("/api/review/next");
+  trainIdx = 0;
+  trainDone = 0;
+  $("#trainer").classList.remove("hidden");
+  renderTrainCard();
+}
+
+function closeTrainer() {
+  $("#trainer").classList.add("hidden");
+  if (!$("#library").classList.contains("hidden")) loadLibrary();
+  if (state.book) loadVocab();
+}
+
+function renderTrainCard() {
+  const box = $("#trainCard");
+  $("#trainProgress").textContent = `${Math.min(trainIdx + 1, trainQueue.length)} / ${trainQueue.length}`;
+  if (trainIdx >= trainQueue.length) {
+    $("#trainProgress").textContent = "";
+    box.innerHTML = `
+      <div class="t-card t-done">
+        <div class="t-check">✓</div>
+        <div class="t-word">${trainDone} Karten geschafft</div>
+        <p class="muted">Der Rest kommt wieder, wenn er fällig ist.</p>
+        <div class="t-actions"><button class="btn btn-primary" id="tClose">Fertig</button></div>
+      </div>`;
+    $("#tClose").onclick = closeTrainer;
     return;
   }
-  let i = 0;
-  const show = () => {
-    if (i >= due.length) {
-      area.innerHTML = '<p class="muted">Fertig für heute ✓</p>';
-      loadVocab();
-      return;
-    }
-    const card = due[i];
-    area.innerHTML = `
-      <div class="review-card">
-        <div class="rword">${card.word}</div>
-        <div class="rsent">${card.sentence || ""}</div>
-        <button class="btn" id="revShow">Aufdecken</button>
-        <div id="revBack" class="hidden">
-          <div class="expl" style="text-align:left; margin-top:.8rem">${md(card.explanation || "")}</div>
-          <div class="review-actions">
-            <button class="btn" id="revAgain">Nochmal</button>
-            <button class="btn btn-primary" id="revGood">Gewusst</button>
-          </div>
+  const card = trainQueue[trainIdx];
+  const cloze = card.sentence
+    ? card.sentence.replace(new RegExp(escapeRegex(card.word), "i"), "____")
+    : "";
+  const iv = predictIntervals(card);
+  box.innerHTML = `
+    <div class="t-card">
+      <div class="t-label">${card.word === card.sentence ? "Wendung" : "Vokabel"} · ${LANG_NAMES[card.language] || card.language}</div>
+      <div class="t-word">${card.word}</div>
+      ${cloze && cloze !== card.word ? `<div class="t-sent">„${cloze}“</div>` : ""}
+      <div class="t-actions"><button class="btn btn-primary" id="tReveal">Aufdecken</button></div>
+      <div id="tBack" class="t-back hidden">
+        <div class="expl">${md(card.explanation || "<em>Noch keine Erklärung — der nächste Agent ergänzt sie.</em>")}</div>
+        ${card.sentence ? `<div class="note-src">„${card.sentence}“</div>` : ""}
+        <div class="grades">
+          <button class="grade-btn g-again" data-g="again">Nochmal<span class="grade-sub">${iv.again}</span></button>
+          <button class="grade-btn g-hard" data-g="hard">Schwer<span class="grade-sub">${iv.hard}</span></button>
+          <button class="grade-btn g-good" data-g="good">Gut<span class="grade-sub">${iv.good}</span></button>
+          <button class="grade-btn g-easy" data-g="easy">Leicht<span class="grade-sub">${iv.easy}</span></button>
         </div>
-      </div>`;
-    $("#revShow").onclick = () => {
-      $("#revBack").classList.remove("hidden");
-      $("#revShow").classList.add("hidden");
-    };
-    const answer = async (grade) => {
-      await api.post("/api/review/answer", { id: card.id, grade });
-      i += 1;
-      show();
-    };
-    $("#revAgain").onclick = () => answer("again");
-    $("#revGood").onclick = () => answer("good");
+      </div>
+    </div>`;
+  $("#tReveal").onclick = () => {
+    $("#tBack").classList.remove("hidden");
+    $("#tReveal").classList.add("hidden");
   };
-  show();
+  const src = box.querySelector(".note-src");
+  if (src && card.book_id) src.onclick = () => {
+    closeTrainer();
+    jumpToSource(card.book_id, card.sentence || card.word, card.chapter_idx);
+  };
+  box.querySelectorAll(".grade-btn").forEach((b) => {
+    b.onclick = async () => {
+      await api.post("/api/review/answer", { id: card.id, grade: b.dataset.g });
+      trainDone += 1;
+      trainIdx += 1;
+      renderTrainCard();
+    };
+  });
 }
+
+$("#reviewBtn").onclick = openTrainer;
+$("#trainStart").onclick = openTrainer;
+$("#trainClose").onclick = closeTrainer;
 
 /* ==================================================== Start */
 loadLibrary();
