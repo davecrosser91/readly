@@ -38,19 +38,43 @@ function md(text) {
 }
 
 /* ==================================================== Bibliothek */
+function bookHue(title) {
+  let h = 0;
+  for (const c of title) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return h;
+}
+
 async function loadLibrary() {
-  const books = await api.get("/api/books");
+  const [books, vocab, notes] = await Promise.all([
+    api.get("/api/books"),
+    api.get("/api/vocab"),
+    api.get("/api/notes"),
+  ]);
+
+  $("#libStats").innerHTML = [
+    [books.length, "Bücher"],
+    [vocab.length, "Vokabeln"],
+    [notes.length, "Wissen"],
+  ].map(([n, label]) => `<div class="stat"><div class="stat-n">${n}</div><div class="stat-l">${label}</div></div>`).join("");
+
   const grid = $("#bookGrid");
   grid.innerHTML = "";
   books.forEach((b) => {
+    const started = b.chapter_idx != null && (b.chapter_idx > 0 || b.para_idx > 0);
+    const pct = b.n_chapters ? Math.round(((b.chapter_idx || 0) / b.n_chapters) * 100) : 0;
     const card = document.createElement("div");
     card.className = "book-card";
+    card.style.setProperty("--hue", bookHue(b.title));
     card.innerHTML = `
-      <h3>${b.title}</h3>
-      <div class="author">${b.author || "&nbsp;"}</div>
-      <div class="meta">
-        <span>${LANG_NAMES[b.language] || b.language}</span>
-        <span>${b.n_chapters} Kapitel</span>
+      <div class="cover"><span class="cover-title">${b.title}</span></div>
+      <div class="card-body">
+        <div class="author">${b.author || "&nbsp;"}</div>
+        <div class="progress"><div class="progress-fill" style="width:${Math.max(pct, started ? 4 : 0)}%"></div></div>
+        <div class="meta">
+          <span>${LANG_NAMES[b.language] || b.language}</span>
+          <span>${started ? `Kapitel ${(b.chapter_idx || 0) + 1}/${b.n_chapters}` : b.n_chapters + " Kapitel"}</span>
+        </div>
+        <div class="cta">${started ? "Weiterlesen" : "Anfangen"} →</div>
       </div>`;
     card.onclick = () => openBook(b.id);
     grid.appendChild(card);

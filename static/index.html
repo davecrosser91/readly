@@ -13,13 +13,19 @@
 <!-- ===================== Bibliothek ===================== -->
 <div id="library" class="library">
   <header class="library-head">
-    <h1>Lector<span class="tld">.</span></h1>
-    <p class="tagline">Lesen. Verstehen. Behalten.</p>
+    <div>
+      <h1>Lector<span class="tld">.</span></h1>
+      <p class="tagline">Lesen. Verstehen. Behalten.</p>
+    </div>
+    <div class="stats" id="libStats"></div>
   </header>
+  <div class="section-label">Bibliothek</div>
   <div id="bookGrid" class="book-grid"></div>
   <div class="import-card">
-    <h3>Buch importieren</h3>
-    <p>EPUB oder TXT — landet lokal in deiner Bibliothek.</p>
+    <div>
+      <h3>Buch importieren</h3>
+      <p>EPUB oder TXT — landet lokal in deiner Bibliothek.</p>
+    </div>
     <div class="import-row">
       <select id="importLang">
         <option value="es">Spanisch</option>
@@ -27,8 +33,8 @@
       </select>
       <label class="btn btn-primary" for="importFile">Datei wählen…</label>
       <input type="file" id="importFile" accept=".epub,.txt" hidden>
+      <span id="importStatus" class="muted"></span>
     </div>
-    <p id="importStatus" class="muted"></p>
   </div>
 </div>
 
