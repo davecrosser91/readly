@@ -16,10 +16,25 @@ Codex/ChatGPT-Sessions an `AGENTS.md` — beide sprechen dieselbe Agent-API.
 ./setup.sh               # prüft Dependencies, installiert den /lector-Skill,
                          # startet den Server → http://127.0.0.1:8123
 ./setup.sh --lan         # zusätzlich vom Handy/Tablet im WLAN erreichbar
+./setup.sh --funnel      # öffentlich via Tailscale Funnel (HTTPS), Token-geschützt
+./setup.sh --funnel-off  # Funnel wieder aus
 ./setup.sh --stop        # Server stoppen
+./setup.sh --status      # Status, URLs und API-Token anzeigen
 ```
 
 Oder manuell: `python3 server.py` (stdlib-only, keine Dependencies).
+
+### Zugriff von außen (v0.2c)
+
+Alles außer direktem localhost (auch LAN!) verlangt den API-Token aus
+`data/token` (wird beim ersten Start erzeugt, steht in `--status`):
+
+- **Agenten/Scripts**: Header `Authorization: Bearer <token>`
+- **Browser/Handy**: einmalig `?token=<token>` an die URL hängen — setzt ein
+  Cookie, danach normal weiterlesen
+- `GET /openapi.json` ist öffentlich (beschreibt nur die API-Form) — damit
+  lässt sich z. B. ein Custom GPT („Lector Tutor") mit Actions anbinden:
+  Tunnel-URL importieren, Bearer-Token als API-Key hinterlegen, fertig.
 
 Beim ersten Start werden zwei Beispielbücher importiert (Original-Kurzgeschichten,
 Spanisch + Englisch). Eigene Bücher: EPUB oder TXT über die Bibliothek importieren.

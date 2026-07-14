@@ -2,14 +2,29 @@
 # Lector setup — verifies dependencies, installs the /lector skill for Claude
 # Code, and starts the local server. Idempotent: safe to run repeatedly.
 #
-#   ./setup.sh           check deps, install skill, start server (localhost)
-#   ./setup.sh --lan     same, but reachable from phone/tablet on your network
-#   ./setup.sh --stop    stop the server
-#   ./setup.sh --status  show server status and URLs
+#   ./setup.sh               check deps, install skill, start server (localhost)
+#   ./setup.sh --lan         same, but reachable from phone/tablet on your network
+#   ./setup.sh --funnel      expose the server publicly via Tailscale Funnel (HTTPS)
+#   ./setup.sh --funnel-off  stop exposing it
+#   ./setup.sh --stop        stop the server
+#   ./setup.sh --status      show server status, URLs and API token
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 PORT="${LECTOR_PORT:-8123}"
+
+tailscale_bin() {
+  if command -v tailscale >/dev/null 2>&1; then echo "tailscale"; return; fi
+  local mac="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+  [ -x "$mac" ] && echo "$mac" && return
+  return 1
+}
+
+show_token() {
+  if [ -f "$ROOT/data/token" ]; then
+    echo "  API token (remote/LAN): $(cat "$ROOT/data/token")"
+  fi
+}
 
 status() {
   if PID=$(lsof -ti tcp:"$PORT" 2>/dev/null); then
@@ -18,6 +33,11 @@ status() {
       IP=$(ipconfig getifaddr en0 2>/dev/null || true)
       [ -n "${IP:-}" ] && echo "  LAN (if started with --lan): http://$IP:$PORT"
     fi
+    if TS=$(tailscale_bin); then
+      FUNNEL=$("$TS" funnel status 2>/dev/null | grep -m1 "https://" | tr -d ' ' || true)
+      [ -n "${FUNNEL:-}" ] && echo "  Funnel: $FUNNEL"
+    fi
+    show_token
   else
     echo "○ Server not running"
   fi
@@ -29,6 +49,20 @@ case "${1:-}" in
     exit 0 ;;
   --status)
     status; exit 0 ;;
+  --funnel)
+    TS=$(tailscale_bin) || { echo "✗ tailscale CLI not found — install Tailscale first"; exit 1; }
+    lsof -ti tcp:"$PORT" >/dev/null 2>&1 || { echo "✗ Server not running — ./setup.sh first"; exit 1; }
+    "$TS" funnel --bg "$PORT" >/dev/null
+    echo "✓ Funnel active:"
+    "$TS" funnel status | grep "https://" | head -2
+    show_token
+    echo "  Auth: Header 'Authorization: Bearer <token>' — oder einmalig ?token=<token> an die URL (setzt Cookie)."
+    exit 0 ;;
+  --funnel-off)
+    TS=$(tailscale_bin) || { echo "✗ tailscale CLI not found"; exit 1; }
+    "$TS" funnel reset
+    echo "✓ Funnel off"
+    exit 0 ;;
 esac
 
 echo "── Lector setup ─────────────────────────────"

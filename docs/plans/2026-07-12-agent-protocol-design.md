@@ -99,6 +99,10 @@ was ich heute gelesen habe" → Action holt Session + Vokabeln → Quiz in ChatG
 - **v0.2b**: codex-Engine (`codex exec`) im Daemon; Agent-Anzeige in der UI.
 - **v0.2c**: Token-Auth + OpenAPI-Spec + Tunnel-Anleitung + Custom GPT;
   optional `lector-mcp`.
+  *Stand 2026-07-15: Server-Seite fertig (Token in `data/token`, Bearer/
+  Cookie/?token=-Auth für alles außer direktem localhost, `/openapi.json`
+  öffentlich, `setup.sh --funnel` für Tailscale). Custom GPT anlegen +
+  optional `lector-mcp` stehen noch aus.*
 
 ## Non-Goals
 Multi-User-Hosting, API-Key-Betrieb, Konto-Sharing, Mobile-App (Web reicht).

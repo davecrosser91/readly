@@ -13,12 +13,14 @@ import os
 import posixpath
 import queue
 import re
+import secrets
 import sqlite3
 import subprocess
 import sys
 import threading
 import time
 import urllib.parse
+from http.cookies import SimpleCookie
 import xml.etree.ElementTree as ET
 import zipfile
 from html.parser import HTMLParser
@@ -33,6 +35,24 @@ DB_PATH = os.path.join(DATA_DIR, "lector.db")
 EVENTS_PATH = os.path.join(DATA_DIR, "events.jsonl")
 PORT = int(os.environ.get("LECTOR_PORT", "8123"))
 HOST = os.environ.get("LECTOR_HOST", "127.0.0.1")  # "0.0.0.0" = im WLAN erreichbar
+TOKEN_PATH = os.path.join(DATA_DIR, "token")
+_TOKEN = None
+
+
+def load_token():
+    """API-Token für Remote-Zugriffe — beim ersten Start erzeugt, in data/."""
+    global _TOKEN
+    if _TOKEN is None:
+        if os.path.isfile(TOKEN_PATH):
+            with open(TOKEN_PATH, encoding="utf-8") as f:
+                _TOKEN = f.read().strip()
+        if not _TOKEN:
+            _TOKEN = secrets.token_urlsafe(32)
+            os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
+            with open(TOKEN_PATH, "w", encoding="utf-8") as f:
+                f.write(_TOKEN + "\n")
+            os.chmod(TOKEN_PATH, 0o600)
+    return _TOKEN
 CLAUDE_BIN = os.environ.get("LECTOR_CLAUDE_BIN", "claude")
 CLAUDE_MODEL = os.environ.get("LECTOR_MODEL", "")  # empty = CLI default
 
@@ -803,17 +823,120 @@ def api_observe():
             "active_marks": marks, "recent_events": events, "recent_vocab": vocab}
 
 
+# ---------------------------------------------------------------- openapi (v0.2c)
+
+def openapi_spec(base_url):
+    """Agent-facing API als OpenAPI 3.1 — für Custom-GPT-Actions & Co."""
+    def op(summary, params=None, body=None, tag="lector"):
+        o = {"summary": summary, "tags": [tag],
+             "responses": {"200": {"description": "OK"}}}
+        if params:
+            o["parameters"] = [
+                {"name": n, "in": "query", "required": req,
+                 "schema": {"type": t}} for n, t, req in params]
+        if body:
+            o["requestBody"] = {"required": True, "content": {"application/json": {
+                "schema": {"type": "object", "properties": {
+                    k: {"type": t} for k, t in body.items()},
+                    "additionalProperties": True}}}}
+        return o
+
+    return {
+        "openapi": "3.1.0",
+        "info": {"title": "Lector", "version": "0.2c",
+                 "description": "Local-first AI reader — agent API. Auth: "
+                                "Bearer-Token (data/token) für Remote-Zugriffe."},
+        "servers": [{"url": base_url}],
+        "security": [{"bearerAuth": []}],
+        "components": {"securitySchemes": {"bearerAuth": {
+            "type": "http", "scheme": "bearer"}}},
+        "paths": {
+            "/api/books": {"get": op("Alle Bücher mit Leseposition")},
+            "/api/books/{id}": {"get": {
+                "summary": "Buch mit Kapitelliste und Position", "tags": ["lector"],
+                "parameters": [{"name": "id", "in": "path", "required": True,
+                                "schema": {"type": "integer"}}],
+                "responses": {"200": {"description": "OK"}}}},
+            "/api/books/{id}/chapters/{idx}": {"get": {
+                "summary": "Absätze eines Kapitels", "tags": ["lector"],
+                "parameters": [
+                    {"name": "id", "in": "path", "required": True,
+                     "schema": {"type": "integer"}},
+                    {"name": "idx", "in": "path", "required": True,
+                     "schema": {"type": "integer"}}],
+                "responses": {"200": {"description": "OK"}}}},
+            "/api/agent/next": {"get": op(
+                "Älteste offene Aktion + kompletter Session-Kontext (Buch, "
+                "Leseposition, Marks, Summaries, Vokabeln)",
+                params=[("types", "string", False)])},
+            "/api/agent/claim": {"post": op(
+                "Aktion claimen (5-min-Timeout)",
+                body={"action_id": "integer", "agent": "string"})},
+            "/api/agent/complete": {"post": op(
+                "Aktion abschließen; result wird verarbeitet",
+                body={"action_id": "integer", "result": "object"})},
+            "/api/agent/push": {"post": op(
+                "Proaktive Nachricht in den Buch-Chat pushen",
+                body={"book_id": "integer", "content": "string"})},
+            "/api/vocab": {
+                "get": op("Vokabeln (neueste zuerst, max 500)"),
+                "post": op("Vokabel schnell anlegen",
+                           body={"book_id": "integer", "word": "string",
+                                 "sentence": "string", "chapter_idx": "integer"})},
+            "/api/notes": {"get": op("Wissens-Notizen",
+                                     params=[("book_id", "string", False)])},
+            "/api/review/next": {"get": op("Fällige Anki-Karten (max 20)")},
+            "/api/review/stats": {"get": op("Anki-Statistik")},
+            "/api/locate": {"get": op(
+                "Textstelle im Buch finden",
+                params=[("book_id", "integer", True), ("text", "string", True),
+                        ("chapter_idx", "string", False)])},
+        },
+    }
+
+
 # ---------------------------------------------------------------- http server
+
+LOCAL_ADDRS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         sys.stderr.write("%s %s\n" % (self.command, self.path))
+
+    # -------------------------------------------------------- auth (v0.2c)
+    def _authorized(self):
+        """Localhost direkt = frei. Alles andere (LAN, Tunnel via
+        X-Forwarded-For) braucht den Token: Bearer-Header, Cookie oder
+        einmalig ?token=… (setzt dann ein Cookie für die UI)."""
+        self._grant_cookie = False
+        if (self.client_address[0] in LOCAL_ADDRS
+                and "X-Forwarded-For" not in self.headers):
+            return True
+        token = load_token()
+        if self.headers.get("Authorization", "") == "Bearer " + token:
+            return True
+        cookie = SimpleCookie(self.headers.get("Cookie", ""))
+        if "lector_token" in cookie and cookie["lector_token"].value == token:
+            return True
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        if q.get("token", [""])[0] == token:
+            self._grant_cookie = True
+            return True
+        return False
+
+    def _send_cookie_if_granted(self):
+        if getattr(self, "_grant_cookie", False):
+            self.send_header("Set-Cookie",
+                             "lector_token=%s; Path=/; Max-Age=31536000; "
+                             "SameSite=Lax" % load_token())
 
     def _json(self, obj, status=200):
         raw = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
+        self._send_cookie_if_granted()
         self.end_headers()
         self.wfile.write(raw)
 
@@ -837,12 +960,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype + "; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
         self.send_header("Cache-Control", "no-store")
+        self._send_cookie_if_granted()
         self.end_headers()
         self.wfile.write(raw)
 
     # ------------------------------------------------------------ GET
     def do_GET(self):
         path = self.path.split("?")[0]
+        if path == "/openapi.json":  # öffentlich: beschreibt nur die API-Form
+            return self._json(openapi_spec(self._base_url()))
+        if not self._authorized():
+            return self._json({"error": "unauthorized"}, 401)
         q = {}
         if "?" in self.path:
             for kv in self.path.split("?", 1)[1].split("&"):
@@ -932,8 +1060,16 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             return self._json({"error": str(e)}, 500)
 
+    def _base_url(self):
+        proto = self.headers.get("X-Forwarded-Proto", "http")
+        host = self.headers.get("X-Forwarded-Host",
+                                self.headers.get("Host", "localhost:%d" % PORT))
+        return "%s://%s" % (proto, host)
+
     # ------------------------------------------------------------ POST
     def do_POST(self):
+        if not self._authorized():
+            return self._json({"error": "unauthorized"}, 401)
         try:
             body = self._body()
             if self.path == "/api/import":
@@ -1059,6 +1195,7 @@ def main():
     threading.Thread(target=summarizer_loop, daemon=True).start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print("Lector running at http://%s:%d" % (HOST, PORT))
+    print("API token (remote/LAN): %s  — Datei: data/token" % load_token())
     server.serve_forever()
 
 
