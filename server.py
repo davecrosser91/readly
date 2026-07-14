@@ -239,6 +239,13 @@ def html_to_text(html):
     return "\n\n".join(paras), p.heading
 
 
+# guide types and filename stems that mark EPUB front/back matter, not reading text
+FRONT_MATTER_GUIDE = {"cover", "title-page", "copyright-page", "toc"}
+FRONT_MATTER_FILE = re.compile(
+    r"(?:^|[_\-.])(cover|cubierta|portada|title|titulo|copyright|info|toc|nav|"
+    r"indice|índice|sinopsis|synopsis)(?:[_\-.]|$)", re.IGNORECASE)
+
+
 def parse_epub(raw):
     """Return list of (title, content) chapters from EPUB bytes."""
     zf = zipfile.ZipFile(BytesIO(raw))
@@ -253,16 +260,27 @@ def parse_epub(raw):
     meta_author = opf.findtext(".//dc:creator", default="", namespaces=ons)
     meta_lang = (opf.findtext(".//dc:language", default="", namespaces=ons) or "")[:2]
 
+    def full_path(href):
+        return posixpath.normpath(posixpath.join(opf_dir, href)) if opf_dir else href
+
     manifest = {}
     for item in opf.findall(".//o:manifest/o:item", ons):
-        manifest[item.get("id")] = (item.get("href"), item.get("media-type", ""))
+        manifest[item.get("id")] = (item.get("href"), item.get("media-type", ""),
+                                    item.get("properties", ""))
+
+    skip_paths = {full_path(ref.get("href", "").split("#")[0])
+                  for ref in opf.findall(".//o:guide/o:reference", ons)
+                  if ref.get("type") in FRONT_MATTER_GUIDE}
 
     chapters = []
     for itemref in opf.findall(".//o:spine/o:itemref", ons):
-        href, mtype = manifest.get(itemref.get("idref"), (None, ""))
+        href, mtype, props = manifest.get(itemref.get("idref"), (None, "", ""))
         if not href or "html" not in mtype:
             continue
-        path = posixpath.normpath(posixpath.join(opf_dir, href)) if opf_dir else href
+        path = full_path(href)
+        stem = posixpath.splitext(posixpath.basename(path))[0]
+        if path in skip_paths or "nav" in props.split() or FRONT_MATTER_FILE.search(stem):
+            continue
         try:
             html = zf.read(path).decode("utf-8", errors="replace")
         except KeyError:
@@ -270,6 +288,8 @@ def parse_epub(raw):
         content, heading = html_to_text(html)
         if len(content) < 200:  # skip covers, title pages
             continue
+        if heading:  # "1DESTINO" → "1 DESTINO" (number glued to title by inline markup)
+            heading = re.sub(r"^(\d+)(?=[^\s\d.,:)])", r"\1 ", heading)
         chapters.append((heading or "Chapter %d" % (len(chapters) + 1), content))
     return {"title": meta_title, "author": meta_author, "language": meta_lang}, chapters
 
