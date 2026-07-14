@@ -190,18 +190,45 @@ label.btn { display: inline-block; }
 
 .reader-body { flex: 1; display: flex; min-height: 0; }
 
-/* Lesetext */
+/* Lesetext — paginiert wie ein Buch */
+.text-col { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .text {
-  flex: 1; overflow-y: auto; padding: 3.4rem clamp(1.5rem, 6vw, 5rem) 45vh;
+  flex: 1; min-height: 0; overflow: hidden; position: relative;
+  touch-action: pan-y; /* horizontale Swipes blättern, statt dass der Browser sie schluckt */
+  padding: 2.6rem clamp(1.5rem, 6vw, 5rem) 1.8rem;
   font-family: var(--serif); font-size: 1.22rem; line-height: 1.9;
   color: var(--text-read);
 }
+.page-clip { /* schneidet exakt eine Seite aus dem Spaltenfluss aus */
+  height: 100%; max-width: 62ch; margin: 0 auto;
+  overflow: hidden; position: relative;
+}
+.pages {
+  height: 100%; position: relative;
+  column-fill: auto; /* Spaltenbreite/-abstand setzt JS auf die gemessene Seitengröße */
+}
 .text .chapter-title {
   font-family: var(--sans); font-size: 1.55rem; font-weight: 700; letter-spacing: -.02em;
-  color: var(--text); margin: 0 auto 2.6rem; max-width: 60ch;
+  color: var(--text); margin: 0 0 1.8rem;
   padding-bottom: 1.1rem; border-bottom: 1px solid var(--line);
 }
-.text p { max-width: 60ch; margin: 0 auto 1.2em; }
+.text p { margin: 0 0 1.2em; }
+
+/* Pager-Fußleiste */
+.pager {
+  display: flex; align-items: center; justify-content: center; gap: 1.6rem;
+  padding: .5rem 1rem; border-top: 1px solid var(--line);
+}
+.pager-btn { font-size: 1.4rem; line-height: 1; padding: .05rem 1rem; }
+.pager-btn:disabled { opacity: .25; cursor: default; background: none; color: var(--text-dim); }
+.pager-info {
+  font-family: var(--sans); font-size: .7rem; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--text-faint); min-width: 8ch; text-align: center;
+}
+
+/* Blättern: dezentes Gleiten des Spaltencontainers (slideTo in app.js).
+   Der frühere 3D-Umschlag ist dokumentiert in docs/plans/2026-07-12-paged-
+   reading-design.md, falls er zurückkommen soll. */
 .w { transition: background .1s ease, color .1s ease; }
 .w:hover { background: var(--accent-dim); color: var(--accent); cursor: pointer; }
 .w.marked { background: var(--mark-soft); box-shadow: inset 0 -2px 0 var(--mark); }

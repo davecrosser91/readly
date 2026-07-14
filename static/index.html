@@ -68,7 +68,14 @@
   </header>
 
   <main class="reader-body">
-    <article id="text" class="text"></article>
+    <div class="text-col">
+      <article id="text" class="text"><div id="pageClip" class="page-clip"><div id="pages" class="pages"></div></div></article>
+      <footer class="pager">
+        <button id="pagePrev" class="ghost pager-btn" title="Previous page">‹</button>
+        <span id="pageInfo" class="pager-info"></span>
+        <button id="pageNext" class="ghost pager-btn" title="Next page">›</button>
+      </footer>
+    </div>
 
     <aside class="sidebar">
       <nav class="tabs">

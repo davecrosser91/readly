@@ -150,34 +150,27 @@ $("#backBtn").onclick = () => {
   loadLibrary();
 };
 
-async function loadChapter(idx, scrollToPara = 0) {
+async function loadChapter(idx, targetPara = 0) {
   const bookId = state.book.book.id;
   state.chapterIdx = idx;
   $("#chapterSelect").value = idx;
   const { paragraphs } = await api.get(`/api/books/${bookId}/chapters/${idx}`);
-  const art = $("#text");
-  art.innerHTML = "";
+  const box = $("#pages");
+  box.innerHTML = "";
 
   const title = document.createElement("h2");
   title.className = "chapter-title";
   title.textContent = state.book.chapters[idx].title;
-  art.appendChild(title);
+  box.appendChild(title);
 
   paragraphs.forEach((para, i) => {
     const p = document.createElement("p");
     p.dataset.idx = i;
     p.innerHTML = tokenize(para);
-    art.appendChild(p);
+    box.appendChild(p);
   });
-  observeParagraphs();
   highlightMarkedWords();
-
-  if (scrollToPara > 0) {
-    const target = art.querySelector(`p[data-idx="${scrollToPara}"]`);
-    if (target) target.scrollIntoView({ block: "center" });
-  } else {
-    art.scrollTop = 0;
-  }
+  layoutPages(targetPara); // targetPara -1 = letzte Seite (Rückwärtsblättern über Kapitelgrenze)
   savePosition();
 }
 
@@ -191,23 +184,127 @@ $("#nextChapter").onclick = () =>
   state.chapterIdx < state.book.chapters.length - 1 && loadChapter(state.chapterIdx + 1);
 $("#chapterSelect").onchange = (e) => loadChapter(parseInt(e.target.value, 10));
 
-/* Leseposition: oberster sichtbarer Absatz */
+/* ==================================================== Seiten (Buch-Layout)
+   Der Kapiteltext fließt in CSS-Spalten von exakt einer Seitenbreite;
+   Blättern = Verschieben des Spaltencontainers. Die Leseposition bleibt
+   (chapter_idx, para_idx): gespeichert wird der erste Absatz der Seite. */
 let posTimer = null;
-function observeParagraphs() {
-  const obs = new IntersectionObserver(
-    (entries) => {
-      const visible = entries
-        .filter((e) => e.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (visible.length) {
-        state.paraIdx = parseInt(visible[0].target.dataset.idx, 10);
-        clearTimeout(posTimer);
-        posTimer = setTimeout(savePosition, 1500);
-      }
-    },
-    { root: $("#text"), threshold: 0.1 }
-  );
-  document.querySelectorAll("#text p").forEach((p) => obs.observe(p));
+const pager = { page: 0, count: 1, stride: 0, gap: 48, flipping: false };
+const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function layoutPages(targetPara = null) {
+  const box = $("#pages");
+  const w = box.clientWidth;
+  if (!w) return;
+  box.style.columnWidth = w + "px";
+  box.style.columnGap = pager.gap + "px";
+  box.style.transform = "none";
+  pager.stride = w + pager.gap;
+  pager.count = Math.max(1, Math.round((box.scrollWidth + pager.gap) / pager.stride));
+  const para = targetPara === null ? state.paraIdx : targetPara;
+  showPage(para === -1 ? pager.count - 1 : pageOfPara(para));
+}
+
+function pageOfPara(paraIdx) {
+  const el = document.querySelector(`#pages p[data-idx="${paraIdx}"]`);
+  return el ? Math.min(pager.count - 1, Math.round(el.offsetLeft / pager.stride)) : 0;
+}
+
+function firstParaOfPage(page) {
+  // erster Absatz, der auf der Seite beginnt; sonst der hineinragende davor
+  let spanning = 0;
+  for (const p of document.querySelectorAll("#pages p")) {
+    const pg = Math.round(p.offsetLeft / pager.stride);
+    if (pg === page) return parseInt(p.dataset.idx, 10);
+    if (pg > page) break;
+    spanning = parseInt(p.dataset.idx, 10);
+  }
+  return spanning;
+}
+
+function showPage(page) {
+  pager.page = Math.max(0, Math.min(pager.count - 1, page));
+  $("#pages").style.transform = `translateX(${-pager.page * pager.stride}px)`;
+  $("#pageInfo").textContent = `${pager.page + 1} / ${pager.count}`;
+  const lastChapter = state.book && state.chapterIdx === state.book.chapters.length - 1;
+  $("#pagePrev").disabled = pager.page === 0 && state.chapterIdx === 0;
+  $("#pageNext").disabled = pager.page === pager.count - 1 && lastChapter;
+  state.paraIdx = firstParaOfPage(pager.page);
+  clearTimeout(posTimer);
+  posTimer = setTimeout(savePosition, 800);
+}
+
+function turnPage(dir) { // +1 vor, -1 zurück; über Kapitelgrenzen hinweg
+  if (pager.flipping || !state.book) return;
+  const target = pager.page + dir;
+  if (target < 0) {
+    if (state.chapterIdx > 0) loadChapter(state.chapterIdx - 1, -1);
+    return;
+  }
+  if (target >= pager.count) {
+    if (state.chapterIdx < state.book.chapters.length - 1) loadChapter(state.chapterIdx + 1, 0);
+    return;
+  }
+  if (REDUCED_MOTION) return showPage(target);
+  slideTo(target);
+}
+
+function slideTo(target) { // dezentes Gleiten statt 3D-Umschlag
+  const box = $("#pages");
+  const fromX = -pager.page * pager.stride;
+  pager.flipping = true;
+  showPage(target); // Endzustand setzen; die Animation überblendet dorthin
+  const toX = -pager.page * pager.stride;
+  const anim = box.animate(
+    [{ transform: `translateX(${fromX}px)` }, { transform: `translateX(${toX}px)` }],
+    { duration: 200, easing: "ease-out" });
+  let done = false;
+  const finish = () => { // idempotent — läuft auch, falls der Browser die Animation drosselt
+    if (done) return;
+    done = true;
+    pager.flipping = false;
+  };
+  anim.onfinish = anim.oncancel = finish;
+  setTimeout(finish, 400);
+}
+
+$("#pageNext").onclick = () => turnPage(1);
+$("#pagePrev").onclick = () => turnPage(-1);
+
+/* Swipe wie im Buch (Touch/Stift — die Maus wählt Text aus) */
+let swipeStart = null;
+$("#text").addEventListener("pointerdown", (e) => {
+  if (e.pointerType === "mouse") return;
+  swipeStart = { x: e.clientX, y: e.clientY };
+});
+$("#text").addEventListener("pointerup", (e) => {
+  if (!swipeStart) return;
+  const dx = e.clientX - swipeStart.x, dy = e.clientY - swipeStart.y;
+  swipeStart = null;
+  if (Math.abs(dx) > 48 && Math.abs(dx) > 1.6 * Math.abs(dy)) turnPage(dx < 0 ? 1 : -1);
+});
+$("#text").addEventListener("pointercancel", () => { swipeStart = null; });
+
+document.addEventListener("keydown", (e) => {
+  if ($("#reader").classList.contains("hidden")) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  if (e.key === "ArrowRight") turnPage(1);
+  if (e.key === "ArrowLeft") turnPage(-1);
+});
+
+/* Neu paginieren, sobald sich die Seitenfläche ändert — deckt Fenster-Resize ab
+   und heilt den Fall, dass beim ersten Layout die Breite noch 0 war. */
+let resizeTimer = null;
+new ResizeObserver(() => {
+  if (!state.book || $("#reader").classList.contains("hidden")) return;
+  const w = $("#pages").clientWidth;
+  if (!w || pager.stride === w + pager.gap) return; // nichts Relevantes geändert
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => layoutPages(state.paraIdx), 120);
+}).observe($("#pageClip"));
+// Websfonts ändern den Umbruch — nach dem Laden einmal neu paginieren
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => { if (state.book) layoutPages(state.paraIdx); });
 }
 
 function savePosition() {
@@ -477,10 +574,9 @@ async function jumpToSource(bookId, text, hintChapter) {
     `/api/locate?book_id=${bookId}&text=${encodeURIComponent(text.slice(0, 80))}&chapter_idx=${hint}`
   );
   if (!res.found) return;
-  await loadChapter(res.chapter_idx, res.para_idx);
-  const p = document.querySelector(`#text p[data-idx="${res.para_idx}"]`);
+  await loadChapter(res.chapter_idx, res.para_idx); // paginiert direkt zur Zielseite
+  const p = document.querySelector(`#pages p[data-idx="${res.para_idx}"]`);
   if (p) {
-    p.scrollIntoView({ block: "center" });
     p.classList.add("flash");
     setTimeout(() => p.classList.remove("flash"), 2200);
   }
