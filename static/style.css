@@ -175,7 +175,7 @@ select:focus, textarea:focus { outline: none; }
 label.btn { display: inline-block; }
 
 /* ===================== Reader ===================== */
-.reader { display: flex; flex-direction: column; height: 100vh; }
+.reader { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 .reader-head {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   padding: .5rem 1rem; border-bottom: 1px solid var(--line);
@@ -458,5 +458,42 @@ label.btn { display: inline-block; }
 
 @media (max-width: 900px) {
   .reader-body { flex-direction: column; }
-  .sidebar { width: 100%; min-width: 0; height: 45vh; border-left: none; border-top: 1px solid var(--line); }
+  .sidebar { width: 100%; min-width: 0; height: 45vh; height: 45dvh; border-left: none; border-top: 1px solid var(--line); }
 }
+
+/* ===================== Phone (iPhone & Co.) ===================== */
+@media (max-width: 600px) {
+  /* Bibliothek: Kopf stapeln statt quetschen — Stats liefen rechts aus dem Bild */
+  .library { padding: 4vh 1.2rem 3rem; }
+  .library-head { flex-direction: column; align-items: stretch; gap: 1.4rem; margin-bottom: 2.2rem; }
+  .head-right { justify-content: space-between; }
+  .stat { padding: 0 1.2rem; }
+  .stat:first-child { padding-left: 0; border-left: none; }
+  .cover { height: 120px; }
+  .import-card, .train-card { flex-direction: column; align-items: stretch; gap: 1rem; }
+  .import-row { flex-wrap: wrap; }
+
+  /* Reader-Kopf: Buchtitel weglassen (steht eh im Kapitel-Kontext), enger */
+  .reader-head { padding: .4rem .6rem; gap: .4rem; }
+  .book-title { display: none; }
+  .head-center { flex: 1; justify-content: center; }
+  .chapter-nav select { max-width: 46vw; }
+  .lang-badge { display: none; }
+
+  /* Lesefläche: weniger Rand, etwas kleinere Schrift */
+  .text { padding: 1.4rem 1.1rem 1rem; font-size: 1.08rem; line-height: 1.75; }
+  .text .chapter-title { font-size: 1.2rem; margin-bottom: 1.2rem; padding-bottom: .7rem; }
+  .sidebar { height: 42vh; height: 42dvh; }
+
+  /* Popover & Toolbar dürfen nicht breiter als der Screen sein */
+  .word-pop { width: min(340px, calc(100vw - 20px)); }
+
+  /* iOS zoomt bei Inputs < 16px in die Seite — deshalb hier 16px */
+  .chat-form textarea, .vocab-add input, select { font-size: 16px; }
+}
+
+/* Safe-Area (Notch / Home-Indikator) — greift nur, wo es sie gibt */
+.pager { padding-bottom: calc(.5rem + env(safe-area-inset-bottom, 0px)); }
+.reader-head { padding-left: max(1rem, env(safe-area-inset-left, 0px));
+               padding-right: max(1rem, env(safe-area-inset-right, 0px)); }
+.library { padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); }
