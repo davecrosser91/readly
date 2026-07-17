@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS books (
   title TEXT NOT NULL,
   author TEXT DEFAULT '',
   language TEXT DEFAULT 'es',
+  mode TEXT DEFAULT 'language',  -- 'language' (Sprachlernen) | 'paper' (Fachtext)
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS chapters (
@@ -205,6 +206,22 @@ TEACHER_SYSTEM = (
     "prüfen. Sei prägnant — das ist eine Sidebar neben einem Buch, keine Vorlesung. "
     "Kein Meta-Kommentar über deinen Kontext; nutze ihn einfach."
 )
+
+PAPER_SYSTEM = (
+    "Du bist Lector im Paper-Modus: wissenschaftlicher Sparringspartner für David, "
+    "der seine eigenen Paper und seine Dissertation (Document-Image-Enhancement, "
+    "OCR, Deep Learning) abschnittsweise durcharbeitet. Antworte auf Deutsch, "
+    "Fachbegriffe bleiben englisch. Er ist der Autor: Hilf ihm, den Text kritisch "
+    "wiederzulesen — erkläre Passagen präzise, benenne Annahmen und Schwächen, "
+    "stelle die Rückfragen, die ein Gutachter oder Prüfer stellen würde, und "
+    "verweise konkret auf Formulierungen aus dem Kontext. Sei prägnant — das ist "
+    "eine Sidebar neben dem Text, keine Vorlesung. Kein Meta-Kommentar über "
+    "deinen Kontext; nutze ihn einfach."
+)
+
+
+def system_for_mode(mode):
+    return PAPER_SYSTEM if mode == "paper" else TEACHER_SYSTEM
 
 
 # ---------------------------------------------------------------- import: epub/txt
@@ -413,7 +430,7 @@ def parse_txt(text):
     return chapters
 
 
-def import_book(filename, raw, title=None, author=None, language=None):
+def import_book(filename, raw, title=None, author=None, language=None, mode=None):
     if filename.lower().endswith(".epub"):
         meta, chapters = parse_epub(raw)
         title = title or meta["title"] or filename
@@ -435,8 +452,8 @@ def import_book(filename, raw, title=None, author=None, language=None):
         raise ValueError("No chapters found — file empty or unknown format.")
     with db() as conn:
         cur = conn.execute(
-            "INSERT INTO books (title, author, language) VALUES (?,?,?)",
-            (title, author, language))
+            "INSERT INTO books (title, author, language, mode) VALUES (?,?,?,?)",
+            (title, author, language, mode or "language"))
         book_id = cur.lastrowid
         for idx, (ctitle, content) in enumerate(chapters):
             conn.execute(
@@ -557,6 +574,7 @@ def api_chat(body):
 
     context = build_context(book_id, chapter_idx, para_idx)
     with db() as conn:
+        book = conn.execute("SELECT mode FROM books WHERE id=?", (book_id,)).fetchone()
         history = conn.execute(
             "SELECT role, content FROM chat WHERE book_id=? ORDER BY id DESC LIMIT 8",
             (book_id,)).fetchall()
@@ -572,7 +590,7 @@ def api_chat(body):
     prompt = "%s\n%s\n\n## Davids Nachricht\n%s" % (context, convo, message)
 
     log_event(book_id, "chat_user", {"message": message})
-    answer = ask_claude(prompt, system=TEACHER_SYSTEM)
+    answer = ask_claude(prompt, system=system_for_mode(book["mode"] if book else None))
     with db() as conn:
         conn.execute("INSERT INTO chat (book_id, role, content, context_json) VALUES (?,?,?,?)",
                      (book_id, "assistant", answer, json.dumps({"chapter_idx": chapter_idx})))
@@ -586,15 +604,25 @@ def api_lookup(body):
     sentence = body.get("sentence", "").strip()
     with db() as conn:
         book = conn.execute("SELECT * FROM books WHERE id=?", (book_id,)).fetchone()
-    lang_name = {"es": "Spanisch", "en": "Englisch"}.get(book["language"], book["language"])
-    prompt = (
-        "Erkläre kompakt für einen deutschen Lerner das %s-Wort \"%s\" in diesem Satz:\n"
-        "\"%s\"\n\n"
-        "Format (Markdown, max ~90 Wörter):\n"
-        "**Bedeutung hier:** <deutsche Bedeutung im Satzkontext>\n"
-        "**Synonyme & Nuancen:** <2-3 Synonyme in der Zielsprache, je 3-6 Wörter zur Abgrenzung>\n"
-        "**Beispiel:** <ein neuer Beispielsatz in der Zielsprache>"
-        % (lang_name, word, sentence))
+    if book["mode"] == "paper":
+        prompt = (
+            "Erkläre kompakt (Deutsch, Fachbegriffe englisch) den Begriff \"%s\" "
+            "in diesem Satz aus Davids eigenem Paper:\n\"%s\"\n\n"
+            "Format (Markdown, max ~90 Wörter):\n"
+            "**Bedeutung hier:** <was der Begriff in genau diesem Kontext heißt>\n"
+            "**Einordnung:** <wie das Konzept im Feld verwendet wird, Abgrenzung zu Verwandtem>\n"
+            "**Prüferblick:** <eine kritische Rückfrage, die dazu kommen könnte>"
+            % (word, sentence))
+    else:
+        lang_name = {"es": "Spanisch", "en": "Englisch"}.get(book["language"], book["language"])
+        prompt = (
+            "Erkläre kompakt für einen deutschen Lerner das %s-Wort \"%s\" in diesem Satz:\n"
+            "\"%s\"\n\n"
+            "Format (Markdown, max ~90 Wörter):\n"
+            "**Bedeutung hier:** <deutsche Bedeutung im Satzkontext>\n"
+            "**Synonyme & Nuancen:** <2-3 Synonyme in der Zielsprache, je 3-6 Wörter zur Abgrenzung>\n"
+            "**Beispiel:** <ein neuer Beispielsatz in der Zielsprache>"
+            % (lang_name, word, sentence))
     explanation = ask_claude(prompt)
     with db() as conn:
         conn.execute(
@@ -1076,7 +1104,8 @@ class Handler(BaseHTTPRequestHandler):
                 raw = base64.b64decode(body["data_b64"])
                 book_id = import_book(body["filename"], raw,
                                       title=body.get("title"), author=body.get("author"),
-                                      language=body.get("language"))
+                                      language=body.get("language"),
+                                      mode=body.get("mode"))
                 return self._json({"book_id": book_id})
             if self.path == "/api/position":
                 with db() as conn:
@@ -1191,6 +1220,9 @@ def main():
         cols = [r["name"] for r in conn.execute("PRAGMA table_info(vocab)")]
         if "chapter_idx" not in cols:
             conn.execute("ALTER TABLE vocab ADD COLUMN chapter_idx INTEGER")
+        cols = [r["name"] for r in conn.execute("PRAGMA table_info(books)")]
+        if "mode" not in cols:
+            conn.execute("ALTER TABLE books ADD COLUMN mode TEXT DEFAULT 'language'")
     seed()
     threading.Thread(target=summarizer_loop, daemon=True).start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)

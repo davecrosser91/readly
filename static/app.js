@@ -92,7 +92,7 @@ async function loadLibrary() {
         <div class="author">${b.author || "&nbsp;"}</div>
         <div class="progress"><div class="progress-fill" style="width:${Math.max(pct, started ? 4 : 0)}%"></div></div>
         <div class="meta">
-          <span>${LANG_NAMES[b.language] || b.language}</span>
+          <span>${b.mode === "paper" ? "Paper" : LANG_NAMES[b.language] || b.language}</span>
           <span>${started ? `Chapter ${(b.chapter_idx || 0) + 1}/${b.n_chapters}` : b.n_chapters + " chapters"}</span>
         </div>
         <div class="cta">${started ? "Continue" : "Start reading"} →</div>
@@ -113,6 +113,7 @@ $("#importFile").addEventListener("change", async (e) => {
       filename: file.name,
       data_b64: b64,
       language: $("#importLang").value,
+      mode: $("#importMode").value,
     });
     $("#importStatus").textContent = "Imported ✓";
     loadLibrary();
